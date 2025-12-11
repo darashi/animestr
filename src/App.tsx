@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import { sortByStartDate } from "./lib/broadcast";
 import { buildSeasonQuery } from "./lib/query";
 import { seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
+import useReactionCounts from "./hooks/useReactionCounts";
 
 type Work = {
 	id: string;
@@ -17,7 +18,7 @@ type SeasonTabConfig = { key: string; label: string; type: "season"; season: Sea
 type TabConfig = SeasonTabConfig;
 
 const SEASON_PAST_COUNT = 7;
-const SEASON_FUTURE_COUNT = 1;
+const SEASON_FUTURE_COUNT = 2;
 
 function buildSeasonTabs(currentSeason: Season | undefined): SeasonTabConfig[] {
 	if (!currentSeason) return [];
@@ -45,6 +46,7 @@ function App() {
 		const seasonTabs = buildSeasonTabs(currentSeason);
 		return seasonTabs;
 	}, [currentSeason]);
+	const currentSeasonKey = currentSeason ? `season-${currentSeason.year}-${currentSeason.idx}` : undefined;
 	const seasonTabs = tabConfigs.filter((tab): tab is SeasonTabConfig => tab.type === "season");
 	const defaultSeasonTab =
 		seasonTabs.find((tab) => currentSeason && tab.key === `season-${currentSeason.year}-${currentSeason.idx}`) ??
@@ -56,7 +58,15 @@ function App() {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
-	const visibleList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
+	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
+	const reactionCounts = useReactionCounts(activeList.map((work) => work.id));
+	const visibleList = useMemo(() => {
+		return [...activeList].sort((a, b) => {
+			const countDiff = (reactionCounts.get(b.id) ?? 0) - (reactionCounts.get(a.id) ?? 0);
+			if (countDiff !== 0) return countDiff;
+			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
+		});
+	}, [activeList, reactionCounts]);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
 	useEffect(() => {
@@ -137,7 +147,9 @@ function App() {
 												key={tab.key}
 												type="button"
 												role="tab"
-												className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""}`}
+												className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""} ${
+													currentSeasonKey === tab.key ? "font-bold" : ""
+												}`}
 												aria-selected={activeTab?.key === tab.key}
 												onClick={() => setActiveTabKey(tab.key)}
 											>

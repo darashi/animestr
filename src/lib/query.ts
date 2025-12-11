@@ -13,6 +13,7 @@ SELECT ?item ?itemLabel ?start ?end WHERE {
 	?item wdt:P31/wdt:P279* wd:Q63952888;
 	      wdt:P580 ?start.
 	OPTIONAL { ?item wdt:P582 ?end. }
+	FILTER NOT EXISTS { ?item wdt:P527 ?part. }
 
 	BIND(xsd:dateTime(?start) + "P14D"^^xsd:duration AS ?startShift)
 	BIND(IF(BOUND(?end), xsd:dateTime(?end) - "P14D"^^xsd:duration, xsd:dateTime(?start) + "P14D"^^xsd:duration) AS ?endShift)

@@ -1,4 +1,6 @@
 import { estimateSeason, formatDate } from "../lib/season";
+import useWorkReactions from "../hooks/useWorkReactions";
+import ReactionAvatarList from "./ReactionAvatarList";
 
 type WorkCardProps = {
 	title: string;
@@ -10,6 +12,7 @@ type WorkCardProps = {
 
 function WorkCard({ title, id, startDate, endDate, url }: WorkCardProps) {
 	const seasonInfo = estimateSeason(startDate, endDate);
+	const { reactions } = useWorkReactions(id);
 	return (
 		<li className="card bg-base-100 shadow-sm border border-base-200">
 			<div className="card-body">
@@ -26,15 +29,20 @@ function WorkCard({ title, id, startDate, endDate, url }: WorkCardProps) {
 						</a>
 					</span>
 				</h3>
-				<div className="text-sm text-base-content/70">
-					{seasonInfo && (
-						<span className={`badge align-middle text-xs mr-2 ${seasonInfo.badgeClass}`}>
-							{seasonInfo.label}
-						</span>
-					)}
-					開始: {formatDate(startDate) ?? "N/A"}
-					{endDate ? ` / 終了: ${formatDate(endDate)}` : ""}
+				<div className="flex items-center gap-2 text-sm text-base-content/70 flex-wrap">
+					{seasonInfo ? (
+						<span className={`badge align-middle text-xs ${seasonInfo.badgeClass}`}>{seasonInfo.label}</span>
+					) : null}
+					<span>
+						開始: {formatDate(startDate) ?? "N/A"}
+						{endDate ? ` / 終了: ${formatDate(endDate)}` : ""}
+					</span>
 				</div>
+				{reactions.length > 0 ? (
+					<div className="mt-1">
+						<ReactionAvatarList reactions={reactions} />
+					</div>
+				) : null}
 			</div>
 		</li>
 	);
