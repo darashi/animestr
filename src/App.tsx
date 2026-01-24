@@ -3,7 +3,7 @@ import WorkCard from "./components/WorkCard";
 import Navbar from "./components/Navbar";
 import { sortByStartDate } from "./lib/broadcast";
 import { buildSeasonQuery } from "./lib/query";
-import { seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
+import { seasonFromYearIdx, seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
 import useReactionCounts from "./hooks/useReactionCounts";
 
 type Work = {
@@ -20,6 +20,10 @@ type TabConfig = SeasonTabConfig;
 const SEASON_PAST_COUNT = 7;
 const SEASON_FUTURE_COUNT = 2;
 const SEASON_PATH_PATTERN = /^\/seasons\/(\d{4})Q([1-4])\/?$/;
+
+function seasonTabKey(season: Season) {
+	return `season-${season.year}-${season.idx}`;
+}
 
 function seasonPath(season: Season) {
 	return `/seasons/${season.year}Q${season.idx + 1}`;
@@ -52,11 +56,15 @@ function parseSeasonPathname(pathname: string, basePath: string) {
 	return { year, idx: quarter - 1 };
 }
 
-function findSeasonTabKey(pathname: string, basePath: string, tabs: SeasonTabConfig[]) {
+function seasonFromPathname(pathname: string, basePath: string) {
 	const parsed = parseSeasonPathname(pathname, basePath);
 	if (!parsed) return null;
-	const key = `season-${parsed.year}-${parsed.idx}`;
-	return tabs.some((tab) => tab.key === key) ? key : null;
+	return seasonFromYearIdx(parsed.year, parsed.idx);
+}
+
+function seasonKeyFromPathname(pathname: string, basePath: string) {
+	const season = seasonFromPathname(pathname, basePath);
+	return season ? seasonTabKey(season) : null;
 }
 
 function buildSeasonTabs(currentSeason: Season | undefined): SeasonTabConfig[] {
@@ -72,36 +80,65 @@ function buildSeasonTabs(currentSeason: Season | undefined): SeasonTabConfig[] {
 	return seasons
 		.sort((a, b) => seasonKeyValue(b.year, b.idx) - seasonKeyValue(a.year, a.idx))
 		.map((season) => ({
-			key: `season-${season.year}-${season.idx}`,
+			key: seasonTabKey(season),
 			label: seasonLabel(season),
 			type: "season" as const,
 			season,
 		}));
 }
 
+function ensureTabKeys<T>(current: Record<string, T>, tabs: TabConfig[], getDefault: () => T) {
+	let changed = false;
+	const next = { ...current };
+	tabs.forEach((tab) => {
+		if (tab.key in next) return;
+		next[tab.key] = getDefault();
+		changed = true;
+	});
+	return changed ? next : current;
+}
+
 function App() {
 	const currentSeason = useMemo(() => startSeason(new Date().toISOString()), []);
+	const basePath = import.meta.env.BASE_URL ?? "/";
+	const [pathname, setPathname] = useState(() => window.location.pathname);
+	const pathSeason = useMemo(() => seasonFromPathname(pathname, basePath), [basePath, pathname]);
 	const tabConfigs = useMemo<TabConfig[]>(() => {
 		const seasonTabs = buildSeasonTabs(currentSeason);
+		if (pathSeason) {
+			const pathKey = seasonTabKey(pathSeason);
+			if (!seasonTabs.some((tab) => tab.key === pathKey)) {
+				seasonTabs.unshift({
+					key: pathKey,
+					label: seasonLabel(pathSeason),
+					type: "season",
+					season: pathSeason,
+				});
+			}
+		}
 		return seasonTabs;
-	}, [currentSeason]);
-	const currentSeasonKey = currentSeason ? `season-${currentSeason.year}-${currentSeason.idx}` : undefined;
+	}, [currentSeason, pathSeason]);
+	const currentSeasonKey = currentSeason ? seasonTabKey(currentSeason) : undefined;
 	const seasonTabs = tabConfigs.filter((tab): tab is SeasonTabConfig => tab.type === "season");
 	const defaultSeasonTab =
-		seasonTabs.find((tab) => currentSeason && tab.key === `season-${currentSeason.year}-${currentSeason.idx}`) ??
-		seasonTabs[0];
-	const basePath = import.meta.env.BASE_URL ?? "/";
+		seasonTabs.find((tab) => currentSeasonKey && tab.key === currentSeasonKey) ?? seasonTabs[0];
 	const [dataByTab, setDataByTab] = useState<Record<string, Work[]>>(() =>
 		Object.fromEntries(tabConfigs.map((tab) => [tab.key, []])),
 	);
+	const [loadingByTab, setLoadingByTab] = useState<Record<string, boolean>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
+	);
+	const [errorByTab, setErrorByTab] = useState<Record<string, string | null>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, null])),
+	);
 	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
-		const keyFromPath = findSeasonTabKey(window.location.pathname, basePath, seasonTabs);
+		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
 		return keyFromPath ?? defaultSeasonTab?.key ?? "";
 	});
-	const [loading, setLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
 	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
+	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
+	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
 	const reactionCounts = useReactionCounts(activeList.map((work) => work.id));
 	const visibleList = useMemo(() => {
 		const selectedSeasonKey =
@@ -127,26 +164,31 @@ function App() {
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
 	useEffect(() => {
-		const handlePopState = () => {
-			const keyFromPath = findSeasonTabKey(window.location.pathname, basePath, seasonTabs);
-			if (keyFromPath) {
-				setActiveTabKey(keyFromPath);
-				return;
-			}
-			if (defaultSeasonTab?.key) {
-				setActiveTabKey(defaultSeasonTab.key);
-			}
-		};
-
+		const handlePopState = () => setPathname(window.location.pathname);
 		window.addEventListener("popstate", handlePopState);
 		return () => window.removeEventListener("popstate", handlePopState);
-	}, [basePath, defaultSeasonTab, seasonTabs]);
+	}, []);
+
+	useEffect(() => {
+		setDataByTab((prev) => ensureTabKeys(prev, tabConfigs, () => []));
+		setLoadingByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
+		setErrorByTab((prev) => ensureTabKeys(prev, tabConfigs, () => null));
+	}, [tabConfigs]);
+
+	useEffect(() => {
+		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
+		const nextKey = keyFromPath ?? defaultSeasonTab?.key ?? "";
+		if (nextKey && nextKey !== activeTabKey) {
+			setActiveTabKey(nextKey);
+		}
+	}, [activeTabKey, basePath, defaultSeasonTab, pathname]);
 
 	useEffect(() => {
 		if (!activeTab || activeTab.type !== "season") return;
 		const nextPath = joinBasePath(basePath, seasonPath(activeTab.season));
 		if (window.location.pathname !== nextPath) {
 			window.history.replaceState(null, "", nextPath);
+			setPathname(nextPath);
 		}
 	}, [activeTab, basePath]);
 
@@ -155,8 +197,8 @@ function App() {
 		const fetchWorks = async () => {
 			if (!activeTab) return;
 			if (dataByTab[activeTab.key]?.length > 0) return;
-			setLoading(true);
-			setError(null);
+			setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: true }));
+			setErrorByTab((prev) => ({ ...prev, [activeTab.key]: null }));
 			try {
 				const query = buildSeasonQuery(activeTab.season);
 				const response = await fetch(
@@ -189,17 +231,20 @@ function App() {
 				setDataByTab((prev) => ({ ...prev, [activeTab.key]: sorted }));
 			} catch (err) {
 				if (controller.signal.aborted) return;
-				setError(err instanceof Error ? err.message : "Failed to fetch data");
+				setErrorByTab((prev) => ({
+					...prev,
+					[activeTab.key]: err instanceof Error ? err.message : "Failed to fetch data",
+				}));
 			} finally {
 				if (!controller.signal.aborted) {
-					setLoading(false);
+					setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: false }));
 				}
 			}
 		};
 
 		fetchWorks();
 		return () => controller.abort();
-	}, [activeTab, activeTabKey, dataByTab, tabConfigs]);
+	}, [activeTab, dataByTab]);
 
 	return (
 		<div className="min-h-screen bg-base-200 text-base-content">
@@ -224,6 +269,7 @@ function App() {
 													const nextPath = joinBasePath(basePath, seasonPath(tab.season));
 													if (window.location.pathname !== nextPath) {
 														window.history.pushState(null, "", nextPath);
+														setPathname(nextPath);
 													}
 												}
 												setActiveTabKey(tab.key);
@@ -237,19 +283,19 @@ function App() {
 						</div>
 
 						<div className="space-y-4">
-							{error && (
+							{activeError && (
 								<div className="alert alert-error">
-									<span>Failed to load: {error}</span>
+									<span>Failed to load: {activeError}</span>
 								</div>
 							)}
 
-							{loading && !error && (
+							{activeLoading && !activeError && (
 								<div className="flex justify-center py-4">
 									<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
 								</div>
 							)}
 
-							{!loading && !error && (
+							{!activeLoading && !activeError && (
 								<>
 									{visibleList.length === 0 ? (
 										<p className="text-sm text-base-content/70">{emptyMessage}</p>
