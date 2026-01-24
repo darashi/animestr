@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import WorkCard from "./components/WorkCard";
 import Navbar from "./components/Navbar";
 import { sortByStartDate } from "./lib/broadcast";
-import { buildSeasonQuery } from "./lib/query";
+import { buildSeasonQuery, buildWorkDetailsQuery } from "./lib/query";
 import { seasonFromYearIdx, seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
 import useReactionCounts from "./hooks/useReactionCounts";
 
@@ -12,6 +12,24 @@ type Work = {
 	startDate?: string;
 	endDate?: string;
 	url: string;
+	voiceActors: { id: string; name: string }[];
+	productionCompanies: { id: string; name: string }[];
+	directors: { id: string; name: string }[];
+	screenwriters: { id: string; name: string }[];
+	composers: { id: string; name: string }[];
+};
+
+type WorkDetails = Pick<
+	Work,
+	"voiceActors" | "productionCompanies" | "directors" | "screenwriters" | "composers"
+>;
+
+const EMPTY_WORK_DETAILS: WorkDetails = {
+	voiceActors: [],
+	productionCompanies: [],
+	directors: [],
+	screenwriters: [],
+	composers: [],
 };
 
 type SeasonTabConfig = { key: string; label: string; type: "season"; season: Season };
@@ -101,6 +119,11 @@ function ensureTabKeys<T>(current: Record<string, T>, tabs: TabConfig[], getDefa
 const LABEL_KEY = "http://www.w3.org/2000/01/rdf-schema#label";
 const START_KEY = "http://www.wikidata.org/prop/direct/P580";
 const END_KEY = "http://www.wikidata.org/prop/direct/P582";
+const CAST_KEY = "http://www.wikidata.org/prop/direct/P725";
+const COMPANY_KEY = "http://www.wikidata.org/prop/direct/P272";
+const DIRECTOR_KEY = "http://www.wikidata.org/prop/direct/P57";
+const SCREENWRITER_KEY = "http://www.wikidata.org/prop/direct/P58";
+const COMPOSER_KEY = "http://www.wikidata.org/prop/direct/P86";
 
 function asArray<T>(value: T | T[] | undefined): T[] {
 	if (!value) return [];
@@ -124,21 +147,107 @@ function pickLabel(labels: unknown): string {
 	return preferred["@value"] ?? preferred.value ?? "Unknown title";
 }
 
+function isWorkNode(node: Record<string, unknown>): boolean {
+	return Boolean(
+		node[START_KEY]
+			?? node["wdt:P580"]
+			?? node[END_KEY]
+			?? node["wdt:P582"]
+			?? node[CAST_KEY]
+			?? node["wdt:P725"]
+			?? node[COMPANY_KEY]
+			?? node["wdt:P272"]
+			?? node[DIRECTOR_KEY]
+			?? node["wdt:P57"]
+			?? node[SCREENWRITER_KEY]
+			?? node["wdt:P58"]
+			?? node[COMPOSER_KEY]
+			?? node["wdt:P86"],
+	);
+}
+
+function resolveEntityLabelMap(graph: unknown[]): Map<string, string> {
+	const labelMap = new Map<string, string>();
+	for (const node of graph) {
+		if (!node || typeof node !== "object") continue;
+		const id = (node as { ["@id"]?: string })["@id"];
+		if (typeof id !== "string") continue;
+		const label = pickLabel((node as any)[LABEL_KEY] ?? (node as any)["rdfs:label"]);
+		if (label && label !== "Unknown title") {
+			labelMap.set(id, label);
+		}
+	}
+	return labelMap;
+}
+
+function resolveEntityFromNode(
+	node: unknown,
+	labelMap: Map<string, string>,
+): { id: string; name: string } | undefined {
+	if (!node) return undefined;
+	const normalizeId = (value: string): string => value.replace("http://www.wikidata.org/entity/", "");
+	if (typeof node === "string") {
+		const name = labelMap.get(node);
+		const id = normalizeId(node);
+		if (!id) return undefined;
+		return { id, name: name ?? id };
+	}
+	if (typeof node === "object") {
+		const obj = node as { ["@id"]?: string };
+		const inlineLabel = pickLabel((node as any)[LABEL_KEY] ?? (node as any)["rdfs:label"]);
+		const rawId = typeof obj["@id"] === "string" ? obj["@id"] : "";
+		const id = rawId ? normalizeId(rawId) : "";
+		const fallbackName = rawId ? labelMap.get(rawId) : undefined;
+		const name = inlineLabel && inlineLabel !== "Unknown title" ? inlineLabel : fallbackName ?? id;
+		if (!id) return undefined;
+		return { id, name };
+	}
+	return undefined;
+}
+
+function toUniqueEntities(nodes: unknown[], labelMap: Map<string, string>) {
+	return Array.from(
+		new Map(
+			nodes
+				.map((node) => resolveEntityFromNode(node, labelMap))
+				.filter((entity): entity is { id: string; name: string } => Boolean(entity))
+				.map((entity) => [entity.id, entity]),
+		).values(),
+	);
+}
+
 function mapWorksFromJsonLd(data: any): Work[] {
 	const graph = asArray(data?.["@graph"] ?? data);
+	const labelMap = resolveEntityLabelMap(graph);
 	return graph
 		.filter((node) => node && typeof node === "object" && typeof node["@id"] === "string")
+		.filter((node) => isWorkNode(node as Record<string, unknown>))
 		.map((node) => {
 			const url = node["@id"] ?? "";
 			const label = pickLabel(node[LABEL_KEY] ?? node["rdfs:label"]);
 			const start = pickFirstValue(node[START_KEY] ?? node["wdt:P580"]);
 			const end = pickFirstValue(node[END_KEY] ?? node["wdt:P582"]);
+			const castNodes = asArray(node[CAST_KEY] ?? node["wdt:P725"]);
+			const companyNodes = asArray(node[COMPANY_KEY] ?? node["wdt:P272"]);
+			const directorNodes = asArray(node[DIRECTOR_KEY] ?? node["wdt:P57"]);
+			const screenwriterNodes = asArray(node[SCREENWRITER_KEY] ?? node["wdt:P58"]);
+			const composerNodes = asArray(node[COMPOSER_KEY] ?? node["wdt:P86"]);
+			const voiceActors = toUniqueEntities(castNodes, labelMap);
+			const productionCompanies = toUniqueEntities(companyNodes, labelMap);
+			const directors = toUniqueEntities(directorNodes, labelMap);
+			const screenwriters = toUniqueEntities(screenwriterNodes, labelMap);
+			const composers = toUniqueEntities(composerNodes, labelMap);
 			return {
 				id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
 				title: label,
 				startDate: start,
 				endDate: end,
 				url,
+				voiceActors,
+				productionCompanies,
+				directors,
+				screenwriters,
+				composers,
 			};
 		});
 }
@@ -188,6 +297,11 @@ function mapWorksFromSparqlTriples(data: any): Work[] | null {
 			startDate: entry.start,
 			endDate: entry.end,
 			url,
+			voiceActors: [],
+			productionCompanies: [],
+			directors: [],
+			screenwriters: [],
+			composers: [],
 		};
 	});
 }
@@ -305,21 +419,31 @@ function App() {
 	const [errorByTab, setErrorByTab] = useState<Record<string, string | null>>(() =>
 		Object.fromEntries(tabConfigs.map((tab) => [tab.key, null])),
 	);
+	const [detailsById, setDetailsById] = useState<Record<string, WorkDetails>>({});
+	const [detailsFetchedById, setDetailsFetchedById] = useState<Record<string, boolean>>({});
 	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
 		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
 		return keyFromPath ?? defaultSeasonTab?.key ?? "";
 	});
 	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
 	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
+	const activeListWithDetails = useMemo(
+		() =>
+			activeList.map((work) => {
+				const details = detailsById[work.id];
+				return details ? { ...work, ...details } : work;
+			}),
+		[activeList, detailsById],
+	);
 	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
 	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
 	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
-	const reactionCounts = useReactionCounts(activeList.map((work) => work.id));
+	const reactionCounts = useReactionCounts(activeListWithDetails.map((work) => work.id));
 	const visibleList = useMemo(() => {
 		const selectedSeasonKey =
 			activeTab?.type === "season" ? seasonKeyValue(activeTab.season.year, activeTab.season.idx) : null;
 
-		return [...activeList].sort((a, b) => {
+		return [...activeListWithDetails].sort((a, b) => {
 			const aSeason = startSeason(a.startDate);
 			const bSeason = startSeason(b.startDate);
 			const aKey = aSeason ? seasonKeyValue(aSeason.year, aSeason.idx) : null;
@@ -424,6 +548,90 @@ function App() {
 		fetchWorks();
 		return () => controller.abort();
 	}, [activeTab, dataByTab]);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		const fetchDetails = async () => {
+			if (activeList.length === 0) return;
+			const targetIds = activeList.map((work) => work.id).filter(Boolean);
+			const missingIds = targetIds.filter((id) => !detailsFetchedById[id]);
+			if (missingIds.length === 0) return;
+
+			try {
+				const query = buildWorkDetailsQuery(missingIds);
+				if (!query) return;
+				const response = await fetch(
+					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
+					{
+						method: "GET",
+						signal: controller.signal,
+						headers: {
+							Accept: "application/ld+json",
+						},
+					},
+				);
+
+				const responseText = await response.text();
+				const contentType = response.headers.get("content-type") ?? "unknown";
+				if (!response.ok) {
+					throw new Error(
+						`Wikidata request failed with status ${response.status} (${contentType}).`,
+					);
+				}
+
+				let data: any;
+				try {
+					data = JSON.parse(responseText);
+				} catch {
+					throw new Error(`Wikidata response was not JSON-LD (${contentType}).`);
+				}
+
+				const detailWorks = mapWorksFromJsonLd(data);
+				const detailMap = new Map(
+					detailWorks.map((work) => [
+						work.id,
+						{
+							voiceActors: work.voiceActors,
+							productionCompanies: work.productionCompanies,
+							directors: work.directors,
+							screenwriters: work.screenwriters,
+							composers: work.composers,
+						} satisfies WorkDetails,
+					]),
+				);
+
+				setDetailsById((prev) => {
+					const next = { ...prev };
+					for (const id of missingIds) {
+						next[id] = detailMap.get(id) ?? prev[id] ?? EMPTY_WORK_DETAILS;
+					}
+					return next;
+				});
+			} catch {
+				if (controller.signal.aborted) return;
+				setDetailsById((prev) => {
+					const next = { ...prev };
+					for (const id of missingIds) {
+						next[id] = prev[id] ?? EMPTY_WORK_DETAILS;
+					}
+					return next;
+				});
+			} finally {
+				if (!controller.signal.aborted) {
+					setDetailsFetchedById((prev) => {
+						const next = { ...prev };
+						for (const id of missingIds) {
+							next[id] = true;
+						}
+						return next;
+					});
+				}
+			}
+		};
+
+		fetchDetails();
+		return () => controller.abort();
+	}, [activeList, detailsFetchedById]);
 
 	return (
 		<div className="min-h-screen bg-base-200 text-base-content">

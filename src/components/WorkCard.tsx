@@ -8,11 +8,34 @@ type WorkCardProps = {
 	startDate?: string;
 	endDate?: string;
 	url: string;
+	voiceActors: { id: string; name: string }[];
+	productionCompanies: { id: string; name: string }[];
+	directors: { id: string; name: string }[];
+	screenwriters: { id: string; name: string }[];
+	composers: { id: string; name: string }[];
 };
 
-function WorkCard({ title, id, startDate, endDate, url }: WorkCardProps) {
+function WorkCard({
+	title,
+	id,
+	startDate,
+	endDate,
+	url,
+	voiceActors,
+	productionCompanies,
+	directors,
+	screenwriters,
+	composers,
+}: WorkCardProps) {
 	const seasonInfo = estimateSeason(startDate, endDate);
 	const { reactions } = useWorkReactions(id);
+	const shownVoiceActors = voiceActors.slice(0, 6);
+	const hasMoreVoiceActors = voiceActors.length > shownVoiceActors.length;
+	const shownCompanies = productionCompanies.slice(0, 4);
+	const hasMoreCompanies = productionCompanies.length > shownCompanies.length;
+	const shownDirectors = directors.slice(0, 2);
+	const shownScreenwriters = screenwriters.slice(0, 2);
+	const shownComposers = composers.slice(0, 2);
 	return (
 		<li className="card bg-base-100 shadow-sm border border-base-200">
 			<div className="card-body">
@@ -38,6 +61,35 @@ function WorkCard({ title, id, startDate, endDate, url }: WorkCardProps) {
 						{endDate ? ` / 終了: ${formatDate(endDate)}` : ""}
 					</span>
 				</div>
+				{shownVoiceActors.length > 0 ? (
+					<p className="text-sm text-base-content/70">
+						声優:{" "}
+						{shownVoiceActors.map((actor) => `${actor.name} (${actor.id || "Q?"})`).join(" / ")}
+						{hasMoreVoiceActors ? " ほか" : ""}
+					</p>
+				) : null}
+				{shownCompanies.length > 0 ? (
+					<p className="text-sm text-base-content/70">
+						制作会社:{" "}
+						{shownCompanies.map((company) => `${company.name} (${company.id || "Q?"})`).join(" / ")}
+						{hasMoreCompanies ? " ほか" : ""}
+					</p>
+				) : null}
+				{shownDirectors.length > 0 ? (
+					<p className="text-sm text-base-content/70">
+						監督: {shownDirectors.map((person) => `${person.name} (${person.id || "Q?"})`).join(" / ")}
+					</p>
+				) : null}
+				{shownScreenwriters.length > 0 ? (
+					<p className="text-sm text-base-content/70">
+						脚本: {shownScreenwriters.map((person) => `${person.name} (${person.id || "Q?"})`).join(" / ")}
+					</p>
+				) : null}
+				{shownComposers.length > 0 ? (
+					<p className="text-sm text-base-content/70">
+						作曲: {shownComposers.map((person) => `${person.name} (${person.id || "Q?"})`).join(" / ")}
+					</p>
+				) : null}
 				{reactions.length > 0 ? (
 					<div className="mt-1">
 						<ReactionAvatarList reactions={reactions} />

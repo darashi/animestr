@@ -1,5 +1,6 @@
 import type { Season } from "./season";
 import { seasonKeyValue } from "./season";
+import { withWikidataPrefix } from "./wikidata";
 
 const seasonIndexExpression = (variable: string) =>
 	`IF(${variable} <= 3, 0, IF(${variable} <= 6, 1, IF(${variable} <= 9, 2, 3)))`;
@@ -39,5 +40,33 @@ CONSTRUCT {
 }
 ORDER BY ?start
 LIMIT 200
+`;
+}
+
+export function buildWorkDetailsQuery(ids: string[]) {
+	if (ids.length === 0) return "";
+	const values = ids.map((id) => withWikidataPrefix(id)).join(" ");
+	return `
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+CONSTRUCT {
+	?item wdt:P725 ?cast.
+	?item wdt:P272 ?company.
+	?item wdt:P57 ?director.
+	?item wdt:P58 ?screenwriter.
+	?item wdt:P86 ?composer.
+	?cast rdfs:label ?castLabel.
+	?company rdfs:label ?companyLabel.
+	?director rdfs:label ?directorLabel.
+	?screenwriter rdfs:label ?screenwriterLabel.
+	?composer rdfs:label ?composerLabel.
+} WHERE {
+	VALUES ?item { ${values} }
+	OPTIONAL { ?item wdt:P725 ?cast. }
+	OPTIONAL { ?item wdt:P272 ?company. }
+	OPTIONAL { ?item wdt:P57 ?director. }
+	OPTIONAL { ?item wdt:P58 ?screenwriter. }
+	OPTIONAL { ?item wdt:P86 ?composer. }
+	SERVICE wikibase:label { bd:serviceParam wikibase:language "ja,en". }
+}
 `;
 }
