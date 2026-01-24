@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { estimateSeason, formatDate } from "../lib/season";
 import useWorkReactions from "../hooks/useWorkReactions";
 import ReactionAvatarList from "./ReactionAvatarList";
@@ -16,18 +17,21 @@ type WorkCardProps = {
 	composers: { id: string; name: string }[];
 };
 
-function WorkCard({
-	title,
-	id,
-	startDate,
-	endDate,
-	url,
-	voiceActors,
-	productionCompanies,
-	directors,
-	screenwriters,
-	composers,
-}: WorkCardProps) {
+const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
+	{
+		title,
+		id,
+		startDate,
+		endDate,
+		url,
+		voiceActors,
+		productionCompanies,
+		directors,
+		screenwriters,
+		composers,
+	},
+	ref,
+) {
 	const seasonInfo = estimateSeason(startDate, endDate);
 	const { reactions } = useWorkReactions(id);
 	const shownVoiceActors = voiceActors.slice(0, 6);
@@ -52,7 +56,7 @@ function WorkCard({
 		);
 	};
 	return (
-		<li className="card bg-base-100 shadow-sm border border-base-200">
+		<li ref={ref} data-work-id={id} className="card bg-base-100 shadow-sm border border-base-200">
 			<div className="card-body">
 				<h3 className="card-title text-base leading-tight">
 					<span className="break-words">
@@ -89,6 +93,6 @@ function WorkCard({
 			</div>
 		</li>
 	);
-}
+});
 
 export default WorkCard;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WorkCard from "./components/WorkCard";
 import Navbar from "./components/Navbar";
 import { sortByStartDate } from "./lib/broadcast";
@@ -421,6 +421,9 @@ function App() {
 	);
 	const [detailsById, setDetailsById] = useState<Record<string, WorkDetails>>({});
 	const [detailsFetchedById, setDetailsFetchedById] = useState<Record<string, boolean>>({});
+	const [viewportIds, setViewportIds] = useState<Set<string>>(() => new Set());
+	const observerRef = useRef<IntersectionObserver | null>(null);
+	const workNodeMap = useRef<Map<string, HTMLLIElement>>(new Map());
 	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
 		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
 		return keyFromPath ?? defaultSeasonTab?.key ?? "";
@@ -435,6 +438,19 @@ function App() {
 			}),
 		[activeList, detailsById],
 	);
+	const registerWorkRef = useCallback((id: string) => {
+		return (node: HTMLLIElement | null) => {
+			const observer = observerRef.current;
+			if (node) {
+				workNodeMap.current.set(id, node);
+				if (observer) observer.observe(node);
+				return;
+			}
+			const existing = workNodeMap.current.get(id);
+			if (existing && observer) observer.unobserve(existing);
+			workNodeMap.current.delete(id);
+		};
+	}, []);
 	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
 	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
 	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
@@ -459,7 +475,7 @@ function App() {
 			if (countDiff !== 0) return countDiff;
 			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
 		});
-	}, [activeList, reactionCounts, activeTab]);
+	}, [activeListWithDetails, reactionCounts, activeTab]);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
 	useEffect(() => {
@@ -550,10 +566,47 @@ function App() {
 	}, [activeTab, dataByTab]);
 
 	useEffect(() => {
+		const observer = new IntersectionObserver(
+			(entries) => {
+				setViewportIds((prev) => {
+					let changed = false;
+					const next = new Set(prev);
+					for (const entry of entries) {
+						const id = (entry.target as HTMLElement).dataset.workId;
+						if (!id) continue;
+						if (entry.isIntersecting) {
+							if (!next.has(id)) {
+								next.add(id);
+								changed = true;
+							}
+						} else if (next.delete(id)) {
+							changed = true;
+						}
+					}
+					return changed ? next : prev;
+				});
+			},
+			{ root: null, rootMargin: "0px 0px 200px 0px", threshold: 0.1 },
+		);
+		observerRef.current = observer;
+		for (const node of workNodeMap.current.values()) {
+			observer.observe(node);
+		}
+		return () => {
+			observer.disconnect();
+			observerRef.current = null;
+			setViewportIds(new Set());
+		};
+	}, []);
+
+	useEffect(() => {
 		const controller = new AbortController();
 		const fetchDetails = async () => {
-			if (activeList.length === 0) return;
-			const targetIds = activeList.map((work) => work.id).filter(Boolean);
+			if (visibleList.length === 0) return;
+			const targetIds = visibleList
+				.filter((work) => viewportIds.has(work.id))
+				.map((work) => work.id)
+				.filter(Boolean);
 			const missingIds = targetIds.filter((id) => !detailsFetchedById[id]);
 			if (missingIds.length === 0) return;
 
@@ -631,7 +684,7 @@ function App() {
 
 		fetchDetails();
 		return () => controller.abort();
-	}, [activeList, detailsFetchedById]);
+	}, [visibleList, detailsFetchedById, viewportIds]);
 
 	return (
 		<div className="min-h-screen bg-base-200 text-base-content">
@@ -689,7 +742,7 @@ function App() {
 									) : (
 										<ul className="grid gap-4">
 											{visibleList.map((work) => (
-												<WorkCard key={work.id || work.url} {...work} />
+												<WorkCard key={work.id || work.url} ref={registerWorkRef(work.id)} {...work} />
 											))}
 										</ul>
 									)}
