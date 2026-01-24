@@ -9,7 +9,12 @@ export function buildSeasonQuery(season: Season) {
 
 	return `
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
-SELECT ?item ?itemLabel ?start ?end WHERE {
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+CONSTRUCT {
+	?item wdt:P580 ?start;
+	      wdt:P582 ?end;
+	      rdfs:label ?itemLabel.
+} WHERE {
 	?item wdt:P31/wdt:P279* wd:Q63952888;
 	      wdt:P580 ?start.
 	OPTIONAL { ?item wdt:P582 ?end. }

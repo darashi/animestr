@@ -98,6 +98,177 @@ function ensureTabKeys<T>(current: Record<string, T>, tabs: TabConfig[], getDefa
 	return changed ? next : current;
 }
 
+const LABEL_KEY = "http://www.w3.org/2000/01/rdf-schema#label";
+const START_KEY = "http://www.wikidata.org/prop/direct/P580";
+const END_KEY = "http://www.wikidata.org/prop/direct/P582";
+
+function asArray<T>(value: T | T[] | undefined): T[] {
+	if (!value) return [];
+	return Array.isArray(value) ? value : [value];
+}
+
+function pickFirstValue(values: unknown): string | undefined {
+	const entry = asArray(values as { ["@value"]?: string; value?: string }[] | undefined)[0];
+	if (!entry) return undefined;
+	if (typeof entry === "string") return entry;
+	return entry["@value"] ?? entry.value ?? undefined;
+}
+
+function pickLabel(labels: unknown): string {
+	const entries = asArray(labels as { ["@language"]?: string; ["@value"]?: string; value?: string }[]);
+	const preferred = entries.find((entry) => entry?.["@language"] === "ja")
+		?? entries.find((entry) => entry?.["@language"] === "en")
+		?? entries[0];
+	if (!preferred) return "Unknown title";
+	if (typeof preferred === "string") return preferred;
+	return preferred["@value"] ?? preferred.value ?? "Unknown title";
+}
+
+function mapWorksFromJsonLd(data: any): Work[] {
+	const graph = asArray(data?.["@graph"] ?? data);
+	return graph
+		.filter((node) => node && typeof node === "object" && typeof node["@id"] === "string")
+		.map((node) => {
+			const url = node["@id"] ?? "";
+			const label = pickLabel(node[LABEL_KEY] ?? node["rdfs:label"]);
+			const start = pickFirstValue(node[START_KEY] ?? node["wdt:P580"]);
+			const end = pickFirstValue(node[END_KEY] ?? node["wdt:P582"]);
+			return {
+				id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
+				title: label,
+				startDate: start,
+				endDate: end,
+				url,
+			};
+		});
+}
+
+function mapWorksFromSparqlTriples(data: any): Work[] | null {
+	const bindings = data?.results?.bindings;
+	if (!Array.isArray(bindings) || bindings.length === 0) return null;
+
+	const map = new Map<
+		string,
+		{ labelByLang: Map<string, string>; fallbackLabel?: string; start?: string; end?: string }
+	>();
+
+	for (const row of bindings) {
+		const subject = row?.subject?.value;
+		const predicate = row?.predicate?.value;
+		const object = row?.object;
+		if (typeof subject !== "string" || typeof predicate !== "string" || !object) continue;
+
+		const entry = map.get(subject) ?? { labelByLang: new Map<string, string>() };
+		if (predicate === LABEL_KEY) {
+			const value = typeof object.value === "string" ? object.value : undefined;
+			const lang = typeof object["xml:lang"] === "string" ? object["xml:lang"] : undefined;
+			if (value && lang) {
+				entry.labelByLang.set(lang, value);
+			} else if (value && !entry.fallbackLabel) {
+				entry.fallbackLabel = value;
+			}
+		} else if (predicate === START_KEY) {
+			if (typeof object.value === "string") entry.start = object.value;
+		} else if (predicate === END_KEY) {
+			if (typeof object.value === "string") entry.end = object.value;
+		}
+
+		map.set(subject, entry);
+	}
+
+	return [...map.entries()].map(([url, entry]) => {
+		const label =
+			entry.labelByLang.get("ja")
+				?? entry.labelByLang.get("en")
+				?? entry.fallbackLabel
+				?? "Unknown title";
+		return {
+			id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
+			title: label,
+			startDate: entry.start,
+			endDate: entry.end,
+			url,
+		};
+	});
+}
+
+function unescapeLiteral(value: string): string {
+	return value
+		.replace(/\\\\/g, "\\")
+		.replace(/\\"/g, "\"")
+		.replace(/\\n/g, "\n")
+		.replace(/\\r/g, "\r")
+		.replace(/\\t/g, "\t");
+}
+
+function parseLiteralObject(raw: string): { value: string; lang?: string } | null {
+	if (!raw.startsWith("\"")) return null;
+	let endIndex = -1;
+	for (let i = 1; i < raw.length; i++) {
+		if (raw[i] === "\"" && raw[i - 1] !== "\\") {
+			endIndex = i;
+			break;
+		}
+	}
+	if (endIndex === -1) return null;
+	const value = unescapeLiteral(raw.slice(1, endIndex));
+	const rest = raw.slice(endIndex + 1).trim();
+	const langMatch = rest.startsWith("@") ? rest.slice(1).match(/^[a-zA-Z-]+/) : null;
+	return langMatch ? { value, lang: langMatch[0] } : { value };
+}
+
+function mapWorksFromNTriples(text: string): Work[] {
+	const map = new Map<
+		string,
+		{ labelByLang: Map<string, string>; fallbackLabel?: string; start?: string; end?: string }
+	>();
+	const lines = text.split(/\r?\n/);
+
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (!trimmed || trimmed.startsWith("#")) continue;
+		const match = trimmed.match(/^<([^>]*)>\s+<([^>]*)>\s+(.+)\s+\.\s*$/);
+		if (!match) continue;
+		const subject = match[1];
+		const predicate = match[2];
+		const objectRaw = match[3];
+
+		const entry = map.get(subject) ?? { labelByLang: new Map<string, string>() };
+		if (predicate === LABEL_KEY) {
+			const literal = parseLiteralObject(objectRaw);
+			if (literal?.value && literal.lang) {
+				entry.labelByLang.set(literal.lang, literal.value);
+			} else if (literal?.value && !entry.fallbackLabel) {
+				entry.fallbackLabel = literal.value;
+			}
+		} else if (predicate === START_KEY || predicate === END_KEY) {
+			const literal = parseLiteralObject(objectRaw);
+			if (literal?.value) {
+				if (predicate === START_KEY) entry.start = literal.value;
+				if (predicate === END_KEY) entry.end = literal.value;
+			}
+		}
+
+		map.set(subject, entry);
+	}
+
+	return [...map.entries()].map(([url, entry]) => {
+		const label =
+			entry.labelByLang.get("ja")
+				?? entry.labelByLang.get("en")
+				?? entry.fallbackLabel
+				?? "Unknown title";
+		return {
+			id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
+			title: label,
+			startDate: entry.start,
+			endDate: entry.end,
+			url,
+		};
+	});
+}
+
+
 function App() {
 	const currentSeason = useMemo(() => startSeason(new Date().toISOString()), []);
 	const basePath = import.meta.env.BASE_URL ?? "/";
@@ -128,6 +299,9 @@ function App() {
 	const [loadingByTab, setLoadingByTab] = useState<Record<string, boolean>>(() =>
 		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
 	);
+	const [fetchedByTab, setFetchedByTab] = useState<Record<string, boolean>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
+	);
 	const [errorByTab, setErrorByTab] = useState<Record<string, string | null>>(() =>
 		Object.fromEntries(tabConfigs.map((tab) => [tab.key, null])),
 	);
@@ -139,6 +313,7 @@ function App() {
 	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
 	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
 	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
+	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
 	const reactionCounts = useReactionCounts(activeList.map((work) => work.id));
 	const visibleList = useMemo(() => {
 		const selectedSeasonKey =
@@ -172,6 +347,7 @@ function App() {
 	useEffect(() => {
 		setDataByTab((prev) => ensureTabKeys(prev, tabConfigs, () => []));
 		setLoadingByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
+		setFetchedByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
 		setErrorByTab((prev) => ensureTabKeys(prev, tabConfigs, () => null));
 	}, [tabConfigs]);
 
@@ -202,29 +378,31 @@ function App() {
 			try {
 				const query = buildSeasonQuery(activeTab.season);
 				const response = await fetch(
-					`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(query)}`,
+					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
 					{
 						method: "GET",
 						signal: controller.signal,
 						headers: {
-							Accept: "application/sparql-results+json",
+							Accept: "application/ld+json",
 						},
 					},
 				);
 
+				const responseText = await response.text();
+				const contentType = response.headers.get("content-type") ?? "unknown";
 				if (!response.ok) {
-					throw new Error(`Wikidata request failed with status ${response.status}`);
+					throw new Error(
+						`Wikidata request failed with status ${response.status} (${contentType}).`,
+					);
 				}
 
-				const data = await response.json();
-				const bindings = data?.results?.bindings ?? [];
-				const mapped: Work[] = bindings.map((item: any) => ({
-					id: item.item?.value ? item.item.value.replace("http://www.wikidata.org/entity/", "") : "",
-					title: item.itemLabel?.value ?? "Unknown title",
-					startDate: item.start?.value,
-					endDate: item.end?.value,
-					url: item.item?.value ?? "",
-				}));
+				let data: any;
+				try {
+					data = JSON.parse(responseText);
+				} catch {
+					throw new Error(`Wikidata response was not JSON-LD (${contentType}).`);
+				}
+				const mapped = mapWorksFromJsonLd(data);
 
 				const sorted = sortByStartDate(mapped.filter((work) => Boolean(work.startDate)), "asc");
 
@@ -238,6 +416,7 @@ function App() {
 			} finally {
 				if (!controller.signal.aborted) {
 					setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: false }));
+					setFetchedByTab((prev) => ({ ...prev, [activeTab.key]: true }));
 				}
 			}
 		};
@@ -295,7 +474,7 @@ function App() {
 								</div>
 							)}
 
-							{!activeLoading && !activeError && (
+							{!activeLoading && !activeError && activeFetched && (
 								<>
 									{visibleList.length === 0 ? (
 										<p className="text-sm text-base-content/70">{emptyMessage}</p>
