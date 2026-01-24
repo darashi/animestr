@@ -71,22 +71,26 @@ CONSTRUCT {
 `;
 }
 
-export function buildCastWorksQuery(castId: string) {
-	const cast = withWikidataPrefix(castId);
-	if (!cast) return "";
+function buildEntityWorksQuery(
+	entityId: string,
+	entityVar: string,
+	labelVar: string,
+	linkPattern: string,
+) {
+	const entity = withWikidataPrefix(entityId);
+	if (!entity) return "";
 	return `
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 CONSTRUCT {
 	?item wdt:P580 ?start;
 	      wdt:P582 ?end;
-	      rdfs:label ?itemLabel;
-	      wdt:P725 ?cast.
-	?cast rdfs:label ?castLabel.
+	      rdfs:label ?itemLabel.
+	${entityVar} rdfs:label ${labelVar}.
 } WHERE {
-	VALUES ?cast { ${cast} }
+	VALUES ${entityVar} { ${entity} }
 	?item wdt:P31/wdt:P279* wd:Q63952888;
 	      wdt:P580 ?start;
-	      wdt:P725 ?cast.
+	      ${linkPattern} ${entityVar}.
 	OPTIONAL { ?item wdt:P582 ?end. }
 	FILTER NOT EXISTS { ?item wdt:P527 ?part. }
 	SERVICE wikibase:label { bd:serviceParam wikibase:language "ja,en". }
@@ -94,4 +98,16 @@ CONSTRUCT {
 ORDER BY ?start
 LIMIT 200
 `;
+}
+
+export function buildCastWorksQuery(castId: string) {
+	return buildEntityWorksQuery(castId, "?cast", "?castLabel", "wdt:P725");
+}
+
+export function buildStaffWorksQuery(staffId: string) {
+	return buildEntityWorksQuery(staffId, "?staff", "?staffLabel", "(wdt:P57|wdt:P58|wdt:P86)");
+}
+
+export function buildCompanyWorksQuery(companyId: string) {
+	return buildEntityWorksQuery(companyId, "?company", "?companyLabel", "wdt:P272");
 }

@@ -3,7 +3,13 @@ import WorkCard from "./components/WorkCard";
 import Navbar from "./components/Navbar";
 import LinkedUserAvatar from "./components/LinkedUserAvatar";
 import { sortByStartDate } from "./lib/broadcast";
-import { buildCastWorksQuery, buildSeasonQuery, buildWorkDetailsQuery } from "./lib/query";
+import {
+	buildCastWorksQuery,
+	buildCompanyWorksQuery,
+	buildSeasonQuery,
+	buildStaffWorksQuery,
+	buildWorkDetailsQuery,
+} from "./lib/query";
 import { seasonFromYearIdx, seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
 import useReactionCounts from "./hooks/useReactionCounts";
 import useWorkReactions from "./hooks/useWorkReactions";
@@ -42,6 +48,8 @@ const SEASON_PAST_COUNT = 7;
 const SEASON_FUTURE_COUNT = 2;
 const SEASON_PATH_PATTERN = /^\/seasons\/(\d{4})Q([1-4])\/?$/;
 const CAST_PATH_PATTERN = /^\/casts\/(Q\d+)\/?$/;
+const STAFF_PATH_PATTERN = /^\/staffs\/(Q\d+)\/?$/;
+const COMPANY_PATH_PATTERN = /^\/companies\/(Q\d+)\/?$/;
 
 function seasonTabKey(season: Season) {
 	return `season-${season.year}-${season.idx}`;
@@ -87,6 +95,20 @@ function seasonFromPathname(pathname: string, basePath: string) {
 function castIdFromPathname(pathname: string, basePath: string) {
 	const stripped = stripBasePath(pathname, basePath);
 	const match = stripped.match(CAST_PATH_PATTERN);
+	if (!match) return null;
+	return match[1];
+}
+
+function staffIdFromPathname(pathname: string, basePath: string) {
+	const stripped = stripBasePath(pathname, basePath);
+	const match = stripped.match(STAFF_PATH_PATTERN);
+	if (!match) return null;
+	return match[1];
+}
+
+function companyIdFromPathname(pathname: string, basePath: string) {
+	const stripped = stripBasePath(pathname, basePath);
+	const match = stripped.match(COMPANY_PATH_PATTERN);
 	if (!match) return null;
 	return match[1];
 }
@@ -158,6 +180,22 @@ function pickLabel(labels: unknown): string {
 	return preferred["@value"] ?? preferred.value ?? "Unknown title";
 }
 
+function normalizeEntityId(value: string): string {
+	if (value.startsWith("http://www.wikidata.org/entity/")) {
+		return value.slice("http://www.wikidata.org/entity/".length);
+	}
+	if (value.startsWith("https://www.wikidata.org/entity/")) {
+		return value.slice("https://www.wikidata.org/entity/".length);
+	}
+	if (value.startsWith("wdt:")) return value.slice(4);
+	if (value.startsWith("wd:")) return value.slice(3);
+	return value;
+}
+
+function entityUrlFromId(id: string): string {
+	return id ? `https://www.wikidata.org/entity/${id}` : "";
+}
+
 function isWorkNode(node: Record<string, unknown>): boolean {
 	return Boolean(
 		node[START_KEY]
@@ -183,9 +221,11 @@ function resolveEntityLabelMap(graph: unknown[]): Map<string, string> {
 		if (!node || typeof node !== "object") continue;
 		const id = (node as { ["@id"]?: string })["@id"];
 		if (typeof id !== "string") continue;
+		const normalizedId = normalizeEntityId(id);
+		if (!normalizedId) continue;
 		const label = pickLabel((node as any)[LABEL_KEY] ?? (node as any)["rdfs:label"]);
 		if (label && label !== "Unknown title") {
-			labelMap.set(id, label);
+			labelMap.set(normalizedId, label);
 		}
 	}
 	return labelMap;
@@ -193,10 +233,8 @@ function resolveEntityLabelMap(graph: unknown[]): Map<string, string> {
 
 function labelForEntityId(labelMap: Map<string, string>, entityId: string): string | null {
 	if (!entityId) return null;
-	const url = entityId.startsWith("http://www.wikidata.org/entity/")
-		? entityId
-		: `http://www.wikidata.org/entity/${entityId}`;
-	return labelMap.get(url) ?? null;
+	const normalizedId = normalizeEntityId(entityId);
+	return labelMap.get(normalizedId) ?? null;
 }
 
 function resolveEntityFromNode(
@@ -204,10 +242,9 @@ function resolveEntityFromNode(
 	labelMap: Map<string, string>,
 ): { id: string; name: string } | undefined {
 	if (!node) return undefined;
-	const normalizeId = (value: string): string => value.replace("http://www.wikidata.org/entity/", "");
 	if (typeof node === "string") {
-		const name = labelMap.get(node);
-		const id = normalizeId(node);
+		const id = normalizeEntityId(node);
+		const name = labelMap.get(id);
 		if (!id) return undefined;
 		return { id, name: name ?? id };
 	}
@@ -215,8 +252,8 @@ function resolveEntityFromNode(
 		const obj = node as { ["@id"]?: string };
 		const inlineLabel = pickLabel((node as any)[LABEL_KEY] ?? (node as any)["rdfs:label"]);
 		const rawId = typeof obj["@id"] === "string" ? obj["@id"] : "";
-		const id = rawId ? normalizeId(rawId) : "";
-		const fallbackName = rawId ? labelMap.get(rawId) : undefined;
+		const id = rawId ? normalizeEntityId(rawId) : "";
+		const fallbackName = id ? labelMap.get(id) : undefined;
 		const name = inlineLabel && inlineLabel !== "Unknown title" ? inlineLabel : fallbackName ?? id;
 		if (!id) return undefined;
 		return { id, name };
@@ -242,7 +279,9 @@ function mapWorksFromJsonLd(data: any): Work[] {
 		.filter((node) => node && typeof node === "object" && typeof node["@id"] === "string")
 		.filter((node) => isWorkNode(node as Record<string, unknown>))
 		.map((node) => {
-			const url = node["@id"] ?? "";
+			const rawId = typeof node["@id"] === "string" ? node["@id"] : "";
+			const id = rawId ? normalizeEntityId(rawId) : "";
+			const url = rawId && rawId.startsWith("http") ? rawId : entityUrlFromId(id);
 			const label = pickLabel(node[LABEL_KEY] ?? node["rdfs:label"]);
 			const start = pickFirstValue(node[START_KEY] ?? node["wdt:P580"]);
 			const end = pickFirstValue(node[END_KEY] ?? node["wdt:P582"]);
@@ -257,7 +296,7 @@ function mapWorksFromJsonLd(data: any): Work[] {
 			const screenwriters = toUniqueEntities(screenwriterNodes, labelMap);
 			const composers = toUniqueEntities(composerNodes, labelMap);
 			return {
-				id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
+				id,
 				title: label,
 				startDate: start,
 				endDate: end,
@@ -311,11 +350,11 @@ function mapWorksFromSparqlTriples(data: any): Work[] | null {
 				?? entry.fallbackLabel
 				?? "Unknown title";
 		return {
-			id: url ? url.replace("http://www.wikidata.org/entity/", "") : "",
+			id: url ? normalizeEntityId(url) : "",
 			title: label,
 			startDate: entry.start,
 			endDate: entry.end,
-			url,
+			url: url && url.startsWith("http") ? url : entityUrlFromId(normalizeEntityId(url)),
 			voiceActors: [],
 			productionCompanies: [],
 			directors: [],
@@ -401,21 +440,23 @@ function mapWorksFromNTriples(text: string): Work[] {
 	});
 }
 
-type CastPageProps = {
-	castId: string;
+type EntityWorksPageProps = {
+	entityId: string;
+	titlePrefix: string;
+	buildWorksQuery: (entityId: string) => string;
 };
 
-function CastPage({ castId }: CastPageProps) {
+function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorksPageProps) {
 	const [works, setWorks] = useState<Work[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [castName, setCastName] = useState(castId);
+	const [entityName, setEntityName] = useState(entityId);
 	const [detailsById, setDetailsById] = useState<Record<string, WorkDetails>>({});
 	const [detailsFetchedById, setDetailsFetchedById] = useState<Record<string, boolean>>({});
 	const [viewportIds, setViewportIds] = useState<Set<string>>(() => new Set());
 	const observerRef = useRef<IntersectionObserver | null>(null);
 	const workNodeMap = useRef<Map<string, HTMLLIElement>>(new Map());
-	const { reactions } = useWorkReactions(castId);
+	const { reactions } = useWorkReactions(entityId);
 
 	const worksWithDetails = useMemo(
 		() =>
@@ -442,7 +483,7 @@ function CastPage({ castId }: CastPageProps) {
 
 	const viewportEntityIds = useMemo(() => {
 		const ids = new Set<string>();
-		ids.add(castId);
+		ids.add(entityId);
 		visibleList.forEach((work) => {
 			if (!viewportIds.has(work.id)) return;
 			if (work.id) ids.add(work.id);
@@ -453,7 +494,7 @@ function CastPage({ castId }: CastPageProps) {
 			work.composers.forEach((person) => ids.add(person.id));
 		});
 		return Array.from(ids);
-	}, [castId, visibleList, viewportIds]);
+	}, [entityId, visibleList, viewportIds]);
 
 	useThingstrEntityReactions(viewportEntityIds);
 
@@ -463,7 +504,7 @@ function CastPage({ castId }: CastPageProps) {
 			setLoading(true);
 			setError(null);
 			try {
-				const query = buildCastWorksQuery(castId);
+				const query = buildWorksQuery(entityId);
 				if (!query) return;
 				const response = await fetch(
 					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
@@ -492,12 +533,12 @@ function CastPage({ castId }: CastPageProps) {
 				}
 
 				const mapped = mapWorksFromJsonLd(data);
-				const sorted = sortByStartDate(mapped, "asc");
+				const sorted = sortByStartDate(mapped, "desc");
 				const graph = asArray(data?.["@graph"] ?? data);
 				const labelMap = resolveEntityLabelMap(graph);
-				const label = labelForEntityId(labelMap, castId);
+				const label = labelForEntityId(labelMap, entityId);
 				setWorks(sorted);
-				setCastName(label ?? castId);
+				setEntityName(label ?? entityId);
 			} catch (err) {
 				if (controller.signal.aborted) return;
 				setError(err instanceof Error ? err.message : "Failed to fetch data");
@@ -510,7 +551,7 @@ function CastPage({ castId }: CastPageProps) {
 
 		fetchWorks();
 		return () => controller.abort();
-	}, [castId]);
+	}, [buildWorksQuery, entityId]);
 
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -633,8 +674,8 @@ function CastPage({ castId }: CastPageProps) {
 		return () => controller.abort();
 	}, [detailsFetchedById, visibleList, viewportIds]);
 
-	const titleBadgeHref = `https://www.wikidata.org/entity/${castId}`;
-	const emptyMessage = `${castName}の作品が見つかりませんでした。`;
+	const titleBadgeHref = `https://www.wikidata.org/entity/${entityId}`;
+	const emptyMessage = `${entityName}の作品が見つかりませんでした。`;
 	const worksByYear = useMemo(() => {
 		const groups = new Map<string, Work[]>();
 		visibleList.forEach((work) => {
@@ -652,14 +693,16 @@ function CastPage({ castId }: CastPageProps) {
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
 						<div className="flex flex-wrap items-center gap-2">
-							<h2 className="text-lg font-semibold">キャスト: {castName}</h2>
+							<h2 className="text-lg font-semibold">
+								{titlePrefix}: {entityName}
+							</h2>
 							<a
 								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
 								href={titleBadgeHref}
 								target="_blank"
 								rel="noreferrer"
 							>
-								{castId}
+								{entityId}
 							</a>
 							{reactions.length > 0 ? (
 								<span className="flex -space-x-2">
@@ -721,6 +764,9 @@ function App() {
 	const basePath = import.meta.env.BASE_URL ?? "/";
 	const [pathname, setPathname] = useState(() => window.location.pathname);
 	const castId = useMemo(() => castIdFromPathname(pathname, basePath), [basePath, pathname]);
+	const staffId = useMemo(() => staffIdFromPathname(pathname, basePath), [basePath, pathname]);
+	const companyId = useMemo(() => companyIdFromPathname(pathname, basePath), [basePath, pathname]);
+	const entityRouteId = castId ?? staffId ?? companyId;
 	const pathSeason = useMemo(() => seasonFromPathname(pathname, basePath), [basePath, pathname]);
 	const tabConfigs = useMemo<TabConfig[]>(() => {
 		const seasonTabs = buildSeasonTabs(currentSeason);
@@ -789,6 +835,18 @@ function App() {
 	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
 	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
 	const reactionCounts = useReactionCounts(activeListWithDetails.map((work) => work.id));
+	const entityPage = useMemo(() => {
+		if (castId) {
+			return { id: castId, titlePrefix: "キャスト", buildWorksQuery: buildCastWorksQuery };
+		}
+		if (staffId) {
+			return { id: staffId, titlePrefix: "スタッフ", buildWorksQuery: buildStaffWorksQuery };
+		}
+		if (companyId) {
+			return { id: companyId, titlePrefix: "制作会社", buildWorksQuery: buildCompanyWorksQuery };
+		}
+		return null;
+	}, [castId, staffId, companyId]);
 	const visibleList = useMemo(() => {
 		const selectedSeasonKey =
 			activeTab?.type === "season" ? seasonKeyValue(activeTab.season.year, activeTab.season.idx) : null;
@@ -811,7 +869,7 @@ function App() {
 		});
 	}, [activeListWithDetails, reactionCounts, activeTab]);
 	const viewportEntityIds = useMemo(() => {
-		if (castId) return [];
+		if (entityRouteId) return [];
 		const ids = new Set<string>();
 		visibleList.forEach((work) => {
 			if (!viewportIds.has(work.id)) return;
@@ -823,7 +881,7 @@ function App() {
 			work.composers.forEach((person) => ids.add(person.id));
 		});
 		return Array.from(ids);
-	}, [castId, visibleList, viewportIds]);
+	}, [entityRouteId, visibleList, viewportIds]);
 	useThingstrEntityReactions(viewportEntityIds);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
@@ -841,26 +899,26 @@ function App() {
 	}, [tabConfigs]);
 
 	useEffect(() => {
-		if (castId) return;
+		if (entityRouteId) return;
 		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
 		const nextKey = keyFromPath ?? defaultSeasonTab?.key ?? "";
 		if (nextKey && nextKey !== activeTabKey) {
 			setActiveTabKey(nextKey);
 		}
-	}, [activeTabKey, basePath, castId, defaultSeasonTab, pathname]);
+	}, [activeTabKey, basePath, defaultSeasonTab, entityRouteId, pathname]);
 
 	useEffect(() => {
-		if (castId) return;
+		if (entityRouteId) return;
 		if (!activeTab || activeTab.type !== "season") return;
 		const nextPath = joinBasePath(basePath, seasonPath(activeTab.season));
 		if (window.location.pathname !== nextPath) {
 			window.history.replaceState(null, "", nextPath);
 			setPathname(nextPath);
 		}
-	}, [activeTab, basePath, castId]);
+	}, [activeTab, basePath, entityRouteId]);
 
 	useEffect(() => {
-		if (castId) return;
+		if (entityRouteId) return;
 		const controller = new AbortController();
 		const fetchWorks = async () => {
 			if (!activeTab) return;
@@ -915,7 +973,7 @@ function App() {
 
 		fetchWorks();
 		return () => controller.abort();
-	}, [activeTab, castId, dataByTab]);
+	}, [activeTab, dataByTab, entityRouteId]);
 
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -952,7 +1010,7 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		if (castId) return;
+		if (entityRouteId) return;
 		const controller = new AbortController();
 		const fetchDetails = async () => {
 			if (visibleList.length === 0) return;
@@ -1043,8 +1101,12 @@ function App() {
 		<div className="min-h-screen bg-base-200 text-base-content">
 			<Navbar />
 			<main className="container mx-auto px-4 py-10">
-				{castId ? (
-					<CastPage castId={castId} />
+				{entityPage ? (
+					<EntityWorksPage
+						entityId={entityPage.id}
+						titlePrefix={entityPage.titlePrefix}
+						buildWorksQuery={entityPage.buildWorksQuery}
+					/>
 				) : (
 					<div className="space-y-6">
 						<section className="space-y-4">

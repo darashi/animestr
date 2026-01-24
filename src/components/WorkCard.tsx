@@ -45,6 +45,16 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 		const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
 		return `${trimmed}/casts/${entityId}`;
 	};
+	const buildStaffLink = (entityId: string) => {
+		if (!entityId) return "";
+		const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+		return `${trimmed}/staffs/${entityId}`;
+	};
+	const buildCompanyLink = (entityId: string) => {
+		if (!entityId) return "";
+		const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+		return `${trimmed}/companies/${entityId}`;
+	};
 	const renderEntities = (
 		label: string,
 		entities: { id: string; name: string }[],
@@ -106,10 +116,10 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 					</span>
 				</div>
 				{renderEntities("キャスト", shownVoiceActors, buildCastLink)}
-				{renderEntities("制作会社", shownCompanies)}
-				{renderEntities("監督", shownDirectors)}
-				{renderEntities("脚本", shownScreenwriters)}
-				{renderEntities("作曲", shownComposers)}
+				{renderEntities("制作会社", shownCompanies, buildCompanyLink)}
+				{renderEntities("監督", shownDirectors, buildStaffLink)}
+				{renderEntities("脚本", shownScreenwriters, buildStaffLink)}
+				{renderEntities("作曲", shownComposers, buildStaffLink)}
 			</div>
 		</li>
 	);
