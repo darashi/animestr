@@ -61,12 +61,26 @@ function App() {
 	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
 	const reactionCounts = useReactionCounts(activeList.map((work) => work.id));
 	const visibleList = useMemo(() => {
+		const selectedSeasonKey =
+			activeTab?.type === "season" ? seasonKeyValue(activeTab.season.year, activeTab.season.idx) : null;
+
 		return [...activeList].sort((a, b) => {
+			const aSeason = startSeason(a.startDate);
+			const bSeason = startSeason(b.startDate);
+			const aKey = aSeason ? seasonKeyValue(aSeason.year, aSeason.idx) : null;
+			const bKey = bSeason ? seasonKeyValue(bSeason.year, bSeason.idx) : null;
+			const aIsEarlier = selectedSeasonKey !== null && aKey !== null && aKey < selectedSeasonKey;
+			const bIsEarlier = selectedSeasonKey !== null && bKey !== null && bKey < selectedSeasonKey;
+
+			if (aIsEarlier !== bIsEarlier) {
+				return aIsEarlier ? 1 : -1;
+			}
+
 			const countDiff = (reactionCounts.get(b.id) ?? 0) - (reactionCounts.get(a.id) ?? 0);
 			if (countDiff !== 0) return countDiff;
 			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
 		});
-	}, [activeList, reactionCounts]);
+	}, [activeList, reactionCounts, activeTab]);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
 	useEffect(() => {
