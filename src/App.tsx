@@ -139,54 +139,56 @@ function App() {
 			<Navbar />
 			<main className="container mx-auto px-4 py-10">
 				<div className="space-y-6">
-					{loading && (
-						<div className="flex justify-center py-4">
-							<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
-						</div>
-					)}
-
-					{!loading && error && (
-						<div className="alert alert-error">
-							<span>Failed to load: {error}</span>
-						</div>
-					)}
-
-					{!loading && !error && (
-						<section className="space-y-4">
-							<div className="card bg-base-100 shadow-sm">
-								<div className="card-body">
-									<div role="tablist" className="tabs tabs-box">
-										{tabConfigs.map((tab) => (
-											<button
-												key={tab.key}
-												type="button"
-												role="tab"
-												className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""} ${
-													currentSeasonKey === tab.key ? "font-bold" : ""
-												}`}
-												aria-selected={activeTab?.key === tab.key}
-												onClick={() => setActiveTabKey(tab.key)}
-											>
-												{tab.label}
-											</button>
-										))}
-									</div>
+					<section className="space-y-4">
+						<div className="card bg-base-100 shadow-sm">
+							<div className="card-body">
+								<div role="tablist" className="tabs tabs-box">
+									{tabConfigs.map((tab) => (
+										<button
+											key={tab.key}
+											type="button"
+											role="tab"
+											className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""} ${
+												currentSeasonKey === tab.key ? "font-bold" : ""
+											}`}
+											aria-selected={activeTab?.key === tab.key}
+											onClick={() => setActiveTabKey(tab.key)}
+										>
+											{tab.label}
+										</button>
+									))}
 								</div>
 							</div>
+						</div>
 
-							<div>
-								{visibleList.length === 0 ? (
-									<p className="text-sm text-base-content/70">{emptyMessage}</p>
-								) : (
-									<ul className="grid gap-4">
-										{visibleList.map((work) => (
-											<WorkCard key={work.id || work.url} {...work} />
-										))}
-									</ul>
-								)}
-							</div>
-						</section>
-					)}
+						<div className="space-y-4">
+							{error && (
+								<div className="alert alert-error">
+									<span>Failed to load: {error}</span>
+								</div>
+							)}
+
+							{loading && !error && (
+								<div className="flex justify-center py-4">
+									<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
+								</div>
+							)}
+
+							{!loading && !error && (
+								<>
+									{visibleList.length === 0 ? (
+										<p className="text-sm text-base-content/70">{emptyMessage}</p>
+									) : (
+										<ul className="grid gap-4">
+											{visibleList.map((work) => (
+												<WorkCard key={work.id || work.url} {...work} />
+											))}
+										</ul>
+									)}
+								</>
+							)}
+						</div>
+					</section>
 				</div>
 			</main>
 		</div>
