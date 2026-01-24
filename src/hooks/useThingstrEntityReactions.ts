@@ -33,7 +33,7 @@ function useThingstrEntityReactions(entityIds: string[]) {
 			{ kinds: [5], limit: 500 },
 		];
 
-		const sub = group.request(filters, { eventStore }).subscribe({
+		const requestSub = group.request(filters, { eventStore }).subscribe({
 			next: (event) => {
 				if (!event || typeof event === "string") return;
 				eventStore.add(event as never);
@@ -41,7 +41,18 @@ function useThingstrEntityReactions(entityIds: string[]) {
 			error: (error) => console.error("Failed to request Thingstr reactions for entities", error),
 		});
 
-		return () => sub.unsubscribe();
+		const liveSub = group.subscription(filters, { eventStore }).subscribe({
+			next: (event) => {
+				if (!event || typeof event === "string") return;
+				eventStore.add(event as never);
+			},
+			error: (error) => console.error("Failed to subscribe to Thingstr reactions for entities", error),
+		});
+
+		return () => {
+			requestSub.unsubscribe();
+			liveSub.unsubscribe();
+		};
 	}, [eventStore, ids, relayPool]);
 }
 
