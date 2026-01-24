@@ -19,6 +19,45 @@ type TabConfig = SeasonTabConfig;
 
 const SEASON_PAST_COUNT = 7;
 const SEASON_FUTURE_COUNT = 2;
+const SEASON_PATH_PATTERN = /^\/seasons\/(\d{4})Q([1-4])\/?$/;
+
+function seasonPath(season: Season) {
+	return `/seasons/${season.year}Q${season.idx + 1}`;
+}
+
+function joinBasePath(basePath: string, path: string) {
+	if (basePath === "/") return path;
+	const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+	return `${trimmed}${path}`;
+}
+
+function stripBasePath(pathname: string, basePath: string) {
+	if (basePath === "/") return pathname;
+	const normalized = basePath.endsWith("/") ? basePath : `${basePath}/`;
+	const trimmed = normalized.slice(0, -1);
+	if (pathname === trimmed) return "/";
+	if (pathname.startsWith(normalized)) {
+		return `/${pathname.slice(normalized.length)}`;
+	}
+	return pathname;
+}
+
+function parseSeasonPathname(pathname: string, basePath: string) {
+	const stripped = stripBasePath(pathname, basePath);
+	const match = stripped.match(SEASON_PATH_PATTERN);
+	if (!match) return null;
+	const year = Number(match[1]);
+	const quarter = Number(match[2]);
+	if (!Number.isFinite(year)) return null;
+	return { year, idx: quarter - 1 };
+}
+
+function findSeasonTabKey(pathname: string, basePath: string, tabs: SeasonTabConfig[]) {
+	const parsed = parseSeasonPathname(pathname, basePath);
+	if (!parsed) return null;
+	const key = `season-${parsed.year}-${parsed.idx}`;
+	return tabs.some((tab) => tab.key === key) ? key : null;
+}
 
 function buildSeasonTabs(currentSeason: Season | undefined): SeasonTabConfig[] {
 	if (!currentSeason) return [];
@@ -51,10 +90,14 @@ function App() {
 	const defaultSeasonTab =
 		seasonTabs.find((tab) => currentSeason && tab.key === `season-${currentSeason.year}-${currentSeason.idx}`) ??
 		seasonTabs[0];
+	const basePath = import.meta.env.BASE_URL ?? "/";
 	const [dataByTab, setDataByTab] = useState<Record<string, Work[]>>(() =>
 		Object.fromEntries(tabConfigs.map((tab) => [tab.key, []])),
 	);
-	const [activeTabKey, setActiveTabKey] = useState<string>(defaultSeasonTab?.key ?? "");
+	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
+		const keyFromPath = findSeasonTabKey(window.location.pathname, basePath, seasonTabs);
+		return keyFromPath ?? defaultSeasonTab?.key ?? "";
+	});
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
@@ -82,6 +125,30 @@ function App() {
 		});
 	}, [activeList, reactionCounts, activeTab]);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
+
+	useEffect(() => {
+		const handlePopState = () => {
+			const keyFromPath = findSeasonTabKey(window.location.pathname, basePath, seasonTabs);
+			if (keyFromPath) {
+				setActiveTabKey(keyFromPath);
+				return;
+			}
+			if (defaultSeasonTab?.key) {
+				setActiveTabKey(defaultSeasonTab.key);
+			}
+		};
+
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, [basePath, defaultSeasonTab, seasonTabs]);
+
+	useEffect(() => {
+		if (!activeTab || activeTab.type !== "season") return;
+		const nextPath = joinBasePath(basePath, seasonPath(activeTab.season));
+		if (window.location.pathname !== nextPath) {
+			window.history.replaceState(null, "", nextPath);
+		}
+	}, [activeTab, basePath]);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -152,7 +219,15 @@ function App() {
 												currentSeasonKey === tab.key ? "font-bold" : ""
 											}`}
 											aria-selected={activeTab?.key === tab.key}
-											onClick={() => setActiveTabKey(tab.key)}
+											onClick={() => {
+												if (tab.type === "season") {
+													const nextPath = joinBasePath(basePath, seasonPath(tab.season));
+													if (window.location.pathname !== nextPath) {
+														window.history.pushState(null, "", nextPath);
+													}
+												}
+												setActiveTabKey(tab.key);
+											}}
 										>
 											{tab.label}
 										</button>
