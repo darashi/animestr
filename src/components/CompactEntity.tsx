@@ -1,3 +1,6 @@
+import useWorkReactions from "../hooks/useWorkReactions";
+import LinkedUserAvatar from "./LinkedUserAvatar";
+
 type CompactEntityProps = {
 	id: string;
 	name: string;
@@ -6,8 +9,10 @@ type CompactEntityProps = {
 function CompactEntity({ id, name }: CompactEntityProps) {
 	const safeId = id || "Q?";
 	const url = id ? `https://www.wikidata.org/entity/${id}` : undefined;
+	const { reactions } = useWorkReactions(id);
+	const shownReactions = reactions.slice(0, 3);
 	return (
-		<span className="inline-flex items-center gap-1 text-xs text-base-content/80">
+		<span className="inline-flex items-center gap-2 text-xs text-base-content/80">
 			<span className="truncate max-w-[12rem]">{name}</span>
 			{url ? (
 				<a
@@ -23,6 +28,17 @@ function CompactEntity({ id, name }: CompactEntityProps) {
 					{safeId}
 				</span>
 			)}
+			{shownReactions.length > 0 ? (
+				<span className="flex -space-x-2">
+					{shownReactions.map((reaction) => (
+						<LinkedUserAvatar
+							key={reaction.id}
+							pubkey={reaction.pubkey}
+							sizeClassName="w-5 h-5"
+						/>
+					))}
+				</span>
+			) : null}
 		</span>
 	);
 }

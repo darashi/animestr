@@ -5,6 +5,7 @@ import { sortByStartDate } from "./lib/broadcast";
 import { buildSeasonQuery, buildWorkDetailsQuery } from "./lib/query";
 import { seasonFromYearIdx, seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
 import useReactionCounts from "./hooks/useReactionCounts";
+import useThingstrEntityReactions from "./hooks/useThingstrEntityReactions";
 
 type Work = {
 	id: string;
@@ -476,6 +477,20 @@ function App() {
 			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
 		});
 	}, [activeListWithDetails, reactionCounts, activeTab]);
+	const viewportEntityIds = useMemo(() => {
+		const ids = new Set<string>();
+		visibleList.forEach((work) => {
+			if (!viewportIds.has(work.id)) return;
+			if (work.id) ids.add(work.id);
+			work.voiceActors.forEach((actor) => ids.add(actor.id));
+			work.productionCompanies.forEach((company) => ids.add(company.id));
+			work.directors.forEach((person) => ids.add(person.id));
+			work.screenwriters.forEach((person) => ids.add(person.id));
+			work.composers.forEach((person) => ids.add(person.id));
+		});
+		return Array.from(ids);
+	}, [visibleList, viewportIds]);
+	useThingstrEntityReactions(viewportEntityIds);
 	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
 
 	useEffect(() => {
