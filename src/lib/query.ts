@@ -50,11 +50,15 @@ export function buildWorkDetailsQuery(ids: string[]) {
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 CONSTRUCT {
 	?item wdt:P725 ?cast.
+	?item p:P725 ?castStatement.
+	?castStatement ps:P725 ?cast.
+	?castStatement pq:P453 ?role.
 	?item wdt:P272 ?company.
 	?item wdt:P57 ?director.
 	?item wdt:P58 ?screenwriter.
 	?item wdt:P86 ?composer.
 	?cast rdfs:label ?castLabel.
+	?role rdfs:label ?roleLabel.
 	?company rdfs:label ?companyLabel.
 	?director rdfs:label ?directorLabel.
 	?screenwriter rdfs:label ?screenwriterLabel.
@@ -62,6 +66,11 @@ CONSTRUCT {
 } WHERE {
 	VALUES ?item { ${values} }
 	OPTIONAL { ?item wdt:P725 ?cast. }
+	OPTIONAL {
+		?item p:P725 ?castStatement.
+		?castStatement ps:P725 ?cast.
+		OPTIONAL { ?castStatement pq:P453 ?role. }
+	}
 	OPTIONAL { ?item wdt:P272 ?company. }
 	OPTIONAL { ?item wdt:P57 ?director. }
 	OPTIONAL { ?item wdt:P58 ?screenwriter. }

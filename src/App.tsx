@@ -21,7 +21,7 @@ type Work = {
 	startDate?: string;
 	endDate?: string;
 	url: string;
-	voiceActors: { id: string; name: string }[];
+	voiceActors: { id: string; name: string; role?: string }[];
 	productionCompanies: { id: string; name: string }[];
 	directors: { id: string; name: string }[];
 	screenwriters: { id: string; name: string }[];
@@ -153,6 +153,9 @@ const LABEL_KEY = "http://www.w3.org/2000/01/rdf-schema#label";
 const START_KEY = "http://www.wikidata.org/prop/direct/P580";
 const END_KEY = "http://www.wikidata.org/prop/direct/P582";
 const CAST_KEY = "http://www.wikidata.org/prop/direct/P725";
+const CAST_STATEMENT_KEY = "http://www.wikidata.org/prop/P725";
+const CAST_STATEMENT_VALUE_KEY = "http://www.wikidata.org/prop/statement/P725";
+const CAST_ROLE_KEY = "http://www.wikidata.org/prop/qualifier/P453";
 const COMPANY_KEY = "http://www.wikidata.org/prop/direct/P272";
 const DIRECTOR_KEY = "http://www.wikidata.org/prop/direct/P57";
 const SCREENWRITER_KEY = "http://www.wikidata.org/prop/direct/P58";
@@ -194,6 +197,16 @@ function normalizeEntityId(value: string): string {
 
 function entityUrlFromId(id: string): string {
 	return id ? `https://www.wikidata.org/entity/${id}` : "";
+}
+
+function resolveEntityId(node: unknown): string | undefined {
+	if (!node) return undefined;
+	if (typeof node === "string") return normalizeEntityId(node);
+	if (typeof node === "object") {
+		const obj = node as { ["@id"]?: string };
+		if (typeof obj["@id"] === "string") return normalizeEntityId(obj["@id"]);
+	}
+	return undefined;
 }
 
 function isWorkNode(node: Record<string, unknown>): boolean {
@@ -261,6 +274,36 @@ function resolveEntityFromNode(
 	return undefined;
 }
 
+function buildVoiceActorsFromStatements(
+	statements: unknown[],
+	statementMap: Map<string, { castId?: string; roleIds: string[] }>,
+	labelMap: Map<string, string>,
+) {
+	const castById = new Map<string, { id: string; name: string; roleNames: Set<string> }>();
+	for (const statement of statements) {
+		const statementId = resolveEntityId(statement);
+		if (!statementId) continue;
+		const entry = statementMap.get(statementId);
+		if (!entry?.castId) continue;
+		const name = labelMap.get(entry.castId) ?? entry.castId;
+		const current = castById.get(entry.castId) ?? {
+			id: entry.castId,
+			name,
+			roleNames: new Set<string>(),
+		};
+		entry.roleIds
+			.map((roleId) => labelMap.get(roleId) ?? roleId)
+			.filter(Boolean)
+			.forEach((roleName) => current.roleNames.add(roleName));
+		castById.set(entry.castId, current);
+	}
+	return Array.from(castById.values()).map((entry) => ({
+		id: entry.id,
+		name: entry.name,
+		role: entry.roleNames.size > 0 ? Array.from(entry.roleNames).join(" / ") : undefined,
+	}));
+}
+
 function toUniqueEntities(nodes: unknown[], labelMap: Map<string, string>) {
 	return Array.from(
 		new Map(
@@ -275,6 +318,25 @@ function toUniqueEntities(nodes: unknown[], labelMap: Map<string, string>) {
 function mapWorksFromJsonLd(data: any): Work[] {
 	const graph = asArray(data?.["@graph"] ?? data);
 	const labelMap = resolveEntityLabelMap(graph);
+	const castStatementMap = new Map<string, { castId?: string; roleIds: string[] }>();
+
+	for (const node of graph) {
+		if (!node || typeof node !== "object") continue;
+		const obj = node as Record<string, unknown>;
+		const rawNodeId = typeof obj["@id"] === "string" ? obj["@id"] : "";
+		if (!rawNodeId) continue;
+		const nodeId = normalizeEntityId(rawNodeId);
+		if (!nodeId) continue;
+		const castValueNode = asArray(obj[CAST_STATEMENT_VALUE_KEY] ?? obj["ps:P725"])[0];
+		const castId = resolveEntityId(castValueNode);
+		const roleIds = asArray(obj[CAST_ROLE_KEY] ?? obj["pq:P453"])
+			.map((role) => resolveEntityId(role))
+			.filter((roleId): roleId is string => Boolean(roleId));
+		if (castId || roleIds.length > 0) {
+			castStatementMap.set(nodeId, { castId, roleIds });
+		}
+	}
+
 	return graph
 		.filter((node) => node && typeof node === "object" && typeof node["@id"] === "string")
 		.filter((node) => isWorkNode(node as Record<string, unknown>))
@@ -286,11 +348,19 @@ function mapWorksFromJsonLd(data: any): Work[] {
 			const start = pickFirstValue(node[START_KEY] ?? node["wdt:P580"]);
 			const end = pickFirstValue(node[END_KEY] ?? node["wdt:P582"]);
 			const castNodes = asArray(node[CAST_KEY] ?? node["wdt:P725"]);
+			const castStatementNodes = asArray(node[CAST_STATEMENT_KEY] ?? node["p:P725"]);
 			const companyNodes = asArray(node[COMPANY_KEY] ?? node["wdt:P272"]);
 			const directorNodes = asArray(node[DIRECTOR_KEY] ?? node["wdt:P57"]);
 			const screenwriterNodes = asArray(node[SCREENWRITER_KEY] ?? node["wdt:P58"]);
 			const composerNodes = asArray(node[COMPOSER_KEY] ?? node["wdt:P86"]);
-			const voiceActors = toUniqueEntities(castNodes, labelMap);
+			const voiceActorsFromStatements = buildVoiceActorsFromStatements(
+				castStatementNodes,
+				castStatementMap,
+				labelMap,
+			);
+			const voiceActors = voiceActorsFromStatements.length > 0
+				? voiceActorsFromStatements
+				: toUniqueEntities(castNodes, labelMap).map((entity) => ({ ...entity }));
 			const productionCompanies = toUniqueEntities(companyNodes, labelMap);
 			const directors = toUniqueEntities(directorNodes, labelMap);
 			const screenwriters = toUniqueEntities(screenwriterNodes, labelMap);

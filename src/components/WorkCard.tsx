@@ -10,7 +10,7 @@ type WorkCardProps = {
 	startDate?: string;
 	endDate?: string;
 	url: string;
-	voiceActors: { id: string; name: string }[];
+	voiceActors: { id: string; name: string; role?: string }[];
 	productionCompanies: { id: string; name: string }[];
 	directors: { id: string; name: string }[];
 	screenwriters: { id: string; name: string }[];
@@ -57,8 +57,9 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 	};
 	const renderEntities = (
 		label: string,
-		entities: { id: string; name: string }[],
+		entities: { id: string; name: string; role?: string }[],
 		buildLinkPath?: (id: string) => string,
+		getSuffix?: (entity: { id: string; name: string; role?: string }) => string | undefined,
 	) => {
 		if (entities.length === 0) return null;
 		return (
@@ -71,6 +72,7 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 							id={entity.id}
 							name={entity.name}
 							linkPath={buildLinkPath ? buildLinkPath(entity.id) : undefined}
+							suffix={getSuffix ? getSuffix(entity) : undefined}
 						/>
 					))}
 				</div>
@@ -115,7 +117,7 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 						{endDate ? ` / 終了: ${formatDate(endDate)}` : ""}
 					</span>
 				</div>
-				{renderEntities("キャスト", shownVoiceActors, buildCastLink)}
+				{renderEntities("キャスト", shownVoiceActors, buildCastLink, (entity) => entity.role)}
 				{renderEntities("制作会社", shownCompanies, buildCompanyLink)}
 				{renderEntities("監督", shownDirectors, buildStaffLink)}
 				{renderEntities("脚本", shownScreenwriters, buildStaffLink)}
