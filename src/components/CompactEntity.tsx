@@ -4,16 +4,23 @@ import LinkedUserAvatar from "./LinkedUserAvatar";
 type CompactEntityProps = {
 	id: string;
 	name: string;
+	linkPath?: string;
 };
 
-function CompactEntity({ id, name }: CompactEntityProps) {
+function CompactEntity({ id, name, linkPath }: CompactEntityProps) {
 	const safeId = id || "Q?";
 	const url = id ? `https://www.wikidata.org/entity/${id}` : undefined;
 	const { reactions } = useWorkReactions(id);
 	const shownReactions = reactions.slice(0, 3);
 	return (
 		<span className="inline-flex items-center gap-2 text-xs text-base-content/80">
-			<span className="truncate max-w-[12rem]">{name}</span>
+			{linkPath ? (
+				<a className="truncate max-w-[12rem] hover:underline" href={linkPath}>
+					{name}
+				</a>
+			) : (
+				<span className="truncate max-w-[12rem]">{name}</span>
+			)}
 			{url ? (
 				<a
 					className="badge badge-outline badge-primary rounded-full no-underline font-normal text-[10px] px-2 py-0.5"

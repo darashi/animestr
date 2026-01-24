@@ -70,3 +70,28 @@ CONSTRUCT {
 }
 `;
 }
+
+export function buildCastWorksQuery(castId: string) {
+	const cast = withWikidataPrefix(castId);
+	if (!cast) return "";
+	return `
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+CONSTRUCT {
+	?item wdt:P580 ?start;
+	      wdt:P582 ?end;
+	      rdfs:label ?itemLabel;
+	      wdt:P725 ?cast.
+	?cast rdfs:label ?castLabel.
+} WHERE {
+	VALUES ?cast { ${cast} }
+	?item wdt:P31/wdt:P279* wd:Q63952888;
+	      wdt:P580 ?start;
+	      wdt:P725 ?cast.
+	OPTIONAL { ?item wdt:P582 ?end. }
+	FILTER NOT EXISTS { ?item wdt:P527 ?part. }
+	SERVICE wikibase:label { bd:serviceParam wikibase:language "ja,en". }
+}
+ORDER BY ?start
+LIMIT 200
+`;
+}

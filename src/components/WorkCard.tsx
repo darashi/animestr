@@ -39,14 +39,29 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 	const shownDirectors = directors;
 	const shownScreenwriters = screenwriters;
 	const shownComposers = composers;
-	const renderEntities = (label: string, entities: { id: string; name: string }[]) => {
+	const basePath = import.meta.env.BASE_URL ?? "/";
+	const buildCastLink = (entityId: string) => {
+		if (!entityId) return "";
+		const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;
+		return `${trimmed}/casts/${entityId}`;
+	};
+	const renderEntities = (
+		label: string,
+		entities: { id: string; name: string }[],
+		buildLinkPath?: (id: string) => string,
+	) => {
 		if (entities.length === 0) return null;
 		return (
 			<div className="flex flex-wrap items-center gap-2 text-sm text-base-content/70">
 				<span className="font-semibold text-base-content">{label}:</span>
 				<div className="flex flex-wrap items-center gap-4">
 					{entities.map((entity) => (
-						<CompactEntity key={entity.id || entity.name} id={entity.id} name={entity.name} />
+						<CompactEntity
+							key={entity.id || entity.name}
+							id={entity.id}
+							name={entity.name}
+							linkPath={buildLinkPath ? buildLinkPath(entity.id) : undefined}
+						/>
 					))}
 				</div>
 			</div>
@@ -90,7 +105,7 @@ const WorkCard = forwardRef<HTMLLIElement, WorkCardProps>(function WorkCard(
 						{endDate ? ` / 終了: ${formatDate(endDate)}` : ""}
 					</span>
 				</div>
-				{renderEntities("キャスト", shownVoiceActors)}
+				{renderEntities("キャスト", shownVoiceActors, buildCastLink)}
 				{renderEntities("制作会社", shownCompanies)}
 				{renderEntities("監督", shownDirectors)}
 				{renderEntities("脚本", shownScreenwriters)}

@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import WorkCard from "./components/WorkCard";
 import Navbar from "./components/Navbar";
+import LinkedUserAvatar from "./components/LinkedUserAvatar";
 import { sortByStartDate } from "./lib/broadcast";
-import { buildSeasonQuery, buildWorkDetailsQuery } from "./lib/query";
+import { buildCastWorksQuery, buildSeasonQuery, buildWorkDetailsQuery } from "./lib/query";
 import { seasonFromYearIdx, seasonLabel, seasonKeyValue, shiftSeason, startSeason, type Season } from "./lib/season";
 import useReactionCounts from "./hooks/useReactionCounts";
+import useWorkReactions from "./hooks/useWorkReactions";
 import useThingstrEntityReactions from "./hooks/useThingstrEntityReactions";
 
 type Work = {
@@ -39,6 +41,7 @@ type TabConfig = SeasonTabConfig;
 const SEASON_PAST_COUNT = 7;
 const SEASON_FUTURE_COUNT = 2;
 const SEASON_PATH_PATTERN = /^\/seasons\/(\d{4})Q([1-4])\/?$/;
+const CAST_PATH_PATTERN = /^\/casts\/(Q\d+)\/?$/;
 
 function seasonTabKey(season: Season) {
 	return `season-${season.year}-${season.idx}`;
@@ -79,6 +82,13 @@ function seasonFromPathname(pathname: string, basePath: string) {
 	const parsed = parseSeasonPathname(pathname, basePath);
 	if (!parsed) return null;
 	return seasonFromYearIdx(parsed.year, parsed.idx);
+}
+
+function castIdFromPathname(pathname: string, basePath: string) {
+	const stripped = stripBasePath(pathname, basePath);
+	const match = stripped.match(CAST_PATH_PATTERN);
+	if (!match) return null;
+	return match[1];
 }
 
 function seasonKeyFromPathname(pathname: string, basePath: string) {
@@ -179,6 +189,14 @@ function resolveEntityLabelMap(graph: unknown[]): Map<string, string> {
 		}
 	}
 	return labelMap;
+}
+
+function labelForEntityId(labelMap: Map<string, string>, entityId: string): string | null {
+	if (!entityId) return null;
+	const url = entityId.startsWith("http://www.wikidata.org/entity/")
+		? entityId
+		: `http://www.wikidata.org/entity/${entityId}`;
+	return labelMap.get(url) ?? null;
 }
 
 function resolveEntityFromNode(
@@ -383,62 +401,31 @@ function mapWorksFromNTriples(text: string): Work[] {
 	});
 }
 
+type CastPageProps = {
+	castId: string;
+};
 
-function App() {
-	const currentSeason = useMemo(() => startSeason(new Date().toISOString()), []);
-	const basePath = import.meta.env.BASE_URL ?? "/";
-	const [pathname, setPathname] = useState(() => window.location.pathname);
-	const pathSeason = useMemo(() => seasonFromPathname(pathname, basePath), [basePath, pathname]);
-	const tabConfigs = useMemo<TabConfig[]>(() => {
-		const seasonTabs = buildSeasonTabs(currentSeason);
-		if (pathSeason) {
-			const pathKey = seasonTabKey(pathSeason);
-			if (!seasonTabs.some((tab) => tab.key === pathKey)) {
-				seasonTabs.unshift({
-					key: pathKey,
-					label: seasonLabel(pathSeason),
-					type: "season",
-					season: pathSeason,
-				});
-			}
-		}
-		return seasonTabs;
-	}, [currentSeason, pathSeason]);
-	const currentSeasonKey = currentSeason ? seasonTabKey(currentSeason) : undefined;
-	const seasonTabs = tabConfigs.filter((tab): tab is SeasonTabConfig => tab.type === "season");
-	const defaultSeasonTab =
-		seasonTabs.find((tab) => currentSeasonKey && tab.key === currentSeasonKey) ?? seasonTabs[0];
-	const [dataByTab, setDataByTab] = useState<Record<string, Work[]>>(() =>
-		Object.fromEntries(tabConfigs.map((tab) => [tab.key, []])),
-	);
-	const [loadingByTab, setLoadingByTab] = useState<Record<string, boolean>>(() =>
-		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
-	);
-	const [fetchedByTab, setFetchedByTab] = useState<Record<string, boolean>>(() =>
-		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
-	);
-	const [errorByTab, setErrorByTab] = useState<Record<string, string | null>>(() =>
-		Object.fromEntries(tabConfigs.map((tab) => [tab.key, null])),
-	);
+function CastPage({ castId }: CastPageProps) {
+	const [works, setWorks] = useState<Work[]>([]);
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [castName, setCastName] = useState(castId);
 	const [detailsById, setDetailsById] = useState<Record<string, WorkDetails>>({});
 	const [detailsFetchedById, setDetailsFetchedById] = useState<Record<string, boolean>>({});
 	const [viewportIds, setViewportIds] = useState<Set<string>>(() => new Set());
 	const observerRef = useRef<IntersectionObserver | null>(null);
 	const workNodeMap = useRef<Map<string, HTMLLIElement>>(new Map());
-	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
-		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
-		return keyFromPath ?? defaultSeasonTab?.key ?? "";
-	});
-	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
-	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
-	const activeListWithDetails = useMemo(
+	const { reactions } = useWorkReactions(castId);
+
+	const worksWithDetails = useMemo(
 		() =>
-			activeList.map((work) => {
+			works.map((work) => {
 				const details = detailsById[work.id];
 				return details ? { ...work, ...details } : work;
 			}),
-		[activeList, detailsById],
+		[detailsById, works],
 	);
+	const visibleList = useMemo(() => sortByStartDate(worksWithDetails, "desc"), [worksWithDetails]);
 	const registerWorkRef = useCallback((id: string) => {
 		return (node: HTMLLIElement | null) => {
 			const observer = observerRef.current;
@@ -452,33 +439,10 @@ function App() {
 			workNodeMap.current.delete(id);
 		};
 	}, []);
-	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
-	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
-	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
-	const reactionCounts = useReactionCounts(activeListWithDetails.map((work) => work.id));
-	const visibleList = useMemo(() => {
-		const selectedSeasonKey =
-			activeTab?.type === "season" ? seasonKeyValue(activeTab.season.year, activeTab.season.idx) : null;
 
-		return [...activeListWithDetails].sort((a, b) => {
-			const aSeason = startSeason(a.startDate);
-			const bSeason = startSeason(b.startDate);
-			const aKey = aSeason ? seasonKeyValue(aSeason.year, aSeason.idx) : null;
-			const bKey = bSeason ? seasonKeyValue(bSeason.year, bSeason.idx) : null;
-			const aIsEarlier = selectedSeasonKey !== null && aKey !== null && aKey < selectedSeasonKey;
-			const bIsEarlier = selectedSeasonKey !== null && bKey !== null && bKey < selectedSeasonKey;
-
-			if (aIsEarlier !== bIsEarlier) {
-				return aIsEarlier ? 1 : -1;
-			}
-
-			const countDiff = (reactionCounts.get(b.id) ?? 0) - (reactionCounts.get(a.id) ?? 0);
-			if (countDiff !== 0) return countDiff;
-			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
-		});
-	}, [activeListWithDetails, reactionCounts, activeTab]);
 	const viewportEntityIds = useMemo(() => {
 		const ids = new Set<string>();
+		ids.add(castId);
 		visibleList.forEach((work) => {
 			if (!viewportIds.has(work.id)) return;
 			if (work.id) ids.add(work.id);
@@ -489,49 +453,18 @@ function App() {
 			work.composers.forEach((person) => ids.add(person.id));
 		});
 		return Array.from(ids);
-	}, [visibleList, viewportIds]);
+	}, [castId, visibleList, viewportIds]);
+
 	useThingstrEntityReactions(viewportEntityIds);
-	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
-
-	useEffect(() => {
-		const handlePopState = () => setPathname(window.location.pathname);
-		window.addEventListener("popstate", handlePopState);
-		return () => window.removeEventListener("popstate", handlePopState);
-	}, []);
-
-	useEffect(() => {
-		setDataByTab((prev) => ensureTabKeys(prev, tabConfigs, () => []));
-		setLoadingByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
-		setFetchedByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
-		setErrorByTab((prev) => ensureTabKeys(prev, tabConfigs, () => null));
-	}, [tabConfigs]);
-
-	useEffect(() => {
-		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
-		const nextKey = keyFromPath ?? defaultSeasonTab?.key ?? "";
-		if (nextKey && nextKey !== activeTabKey) {
-			setActiveTabKey(nextKey);
-		}
-	}, [activeTabKey, basePath, defaultSeasonTab, pathname]);
-
-	useEffect(() => {
-		if (!activeTab || activeTab.type !== "season") return;
-		const nextPath = joinBasePath(basePath, seasonPath(activeTab.season));
-		if (window.location.pathname !== nextPath) {
-			window.history.replaceState(null, "", nextPath);
-			setPathname(nextPath);
-		}
-	}, [activeTab, basePath]);
 
 	useEffect(() => {
 		const controller = new AbortController();
 		const fetchWorks = async () => {
-			if (!activeTab) return;
-			if (dataByTab[activeTab.key]?.length > 0) return;
-			setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: true }));
-			setErrorByTab((prev) => ({ ...prev, [activeTab.key]: null }));
+			setLoading(true);
+			setError(null);
 			try {
-				const query = buildSeasonQuery(activeTab.season);
+				const query = buildCastWorksQuery(castId);
+				if (!query) return;
 				const response = await fetch(
 					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
 					{
@@ -557,28 +490,27 @@ function App() {
 				} catch {
 					throw new Error(`Wikidata response was not JSON-LD (${contentType}).`);
 				}
+
 				const mapped = mapWorksFromJsonLd(data);
-
-				const sorted = sortByStartDate(mapped.filter((work) => Boolean(work.startDate)), "asc");
-
-				setDataByTab((prev) => ({ ...prev, [activeTab.key]: sorted }));
+				const sorted = sortByStartDate(mapped, "asc");
+				const graph = asArray(data?.["@graph"] ?? data);
+				const labelMap = resolveEntityLabelMap(graph);
+				const label = labelForEntityId(labelMap, castId);
+				setWorks(sorted);
+				setCastName(label ?? castId);
 			} catch (err) {
 				if (controller.signal.aborted) return;
-				setErrorByTab((prev) => ({
-					...prev,
-					[activeTab.key]: err instanceof Error ? err.message : "Failed to fetch data",
-				}));
+				setError(err instanceof Error ? err.message : "Failed to fetch data");
 			} finally {
 				if (!controller.signal.aborted) {
-					setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: false }));
-					setFetchedByTab((prev) => ({ ...prev, [activeTab.key]: true }));
+					setLoading(false);
 				}
 			}
 		};
 
 		fetchWorks();
 		return () => controller.abort();
-	}, [activeTab, dataByTab]);
+	}, [castId]);
 
 	useEffect(() => {
 		const observer = new IntersectionObserver(
@@ -699,73 +631,483 @@ function App() {
 
 		fetchDetails();
 		return () => controller.abort();
+	}, [detailsFetchedById, visibleList, viewportIds]);
+
+	const titleBadgeHref = `https://www.wikidata.org/entity/${castId}`;
+	const emptyMessage = `${castName}の作品が見つかりませんでした。`;
+	const worksByYear = useMemo(() => {
+		const groups = new Map<string, Work[]>();
+		visibleList.forEach((work) => {
+			const year = work.startDate ? new Date(work.startDate).getFullYear().toString() : "Unknown";
+			const list = groups.get(year) ?? [];
+			list.push(work);
+			groups.set(year, list);
+		});
+		return Array.from(groups.entries());
+	}, [visibleList]);
+
+	return (
+		<div className="space-y-6">
+			<section className="space-y-4">
+				<div className="card bg-base-100 shadow-sm">
+					<div className="card-body">
+						<div className="flex flex-wrap items-center gap-2">
+							<h2 className="text-lg font-semibold">キャスト: {castName}</h2>
+							<a
+								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
+								href={titleBadgeHref}
+								target="_blank"
+								rel="noreferrer"
+							>
+								{castId}
+							</a>
+							{reactions.length > 0 ? (
+								<span className="flex -space-x-2">
+									{reactions.slice(0, 5).map((reaction) => (
+										<LinkedUserAvatar
+											key={reaction.id}
+											pubkey={reaction.pubkey}
+											sizeClassName="w-6 h-6"
+										/>
+									))}
+								</span>
+							) : null}
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section className="space-y-4">
+				{error && (
+					<div className="alert alert-error">
+						<span>Failed to load: {error}</span>
+					</div>
+				)}
+
+				{loading && !error && (
+					<div className="flex justify-center py-4">
+						<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
+					</div>
+				)}
+
+				{!loading && !error && (
+					<>
+						{visibleList.length === 0 ? (
+							<p className="text-sm text-base-content/70">{emptyMessage}</p>
+						) : (
+							<div className="space-y-6">
+								{worksByYear.map(([year, items]) => (
+									<section key={year} className="space-y-3">
+										<h3 className="text-base font-semibold text-base-content">{year}</h3>
+										<ul className="grid gap-4">
+											{items.map((work) => (
+												<WorkCard key={work.id || work.url} ref={registerWorkRef(work.id)} {...work} />
+											))}
+										</ul>
+									</section>
+								))}
+							</div>
+						)}
+					</>
+				)}
+			</section>
+		</div>
+	);
+}
+
+
+function App() {
+	const currentSeason = useMemo(() => startSeason(new Date().toISOString()), []);
+	const basePath = import.meta.env.BASE_URL ?? "/";
+	const [pathname, setPathname] = useState(() => window.location.pathname);
+	const castId = useMemo(() => castIdFromPathname(pathname, basePath), [basePath, pathname]);
+	const pathSeason = useMemo(() => seasonFromPathname(pathname, basePath), [basePath, pathname]);
+	const tabConfigs = useMemo<TabConfig[]>(() => {
+		const seasonTabs = buildSeasonTabs(currentSeason);
+		if (pathSeason) {
+			const pathKey = seasonTabKey(pathSeason);
+			if (!seasonTabs.some((tab) => tab.key === pathKey)) {
+				seasonTabs.unshift({
+					key: pathKey,
+					label: seasonLabel(pathSeason),
+					type: "season",
+					season: pathSeason,
+				});
+			}
+		}
+		return seasonTabs;
+	}, [currentSeason, pathSeason]);
+	const currentSeasonKey = currentSeason ? seasonTabKey(currentSeason) : undefined;
+	const seasonTabs = tabConfigs.filter((tab): tab is SeasonTabConfig => tab.type === "season");
+	const defaultSeasonTab =
+		seasonTabs.find((tab) => currentSeasonKey && tab.key === currentSeasonKey) ?? seasonTabs[0];
+	const [dataByTab, setDataByTab] = useState<Record<string, Work[]>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, []])),
+	);
+	const [loadingByTab, setLoadingByTab] = useState<Record<string, boolean>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
+	);
+	const [fetchedByTab, setFetchedByTab] = useState<Record<string, boolean>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, false])),
+	);
+	const [errorByTab, setErrorByTab] = useState<Record<string, string | null>>(() =>
+		Object.fromEntries(tabConfigs.map((tab) => [tab.key, null])),
+	);
+	const [detailsById, setDetailsById] = useState<Record<string, WorkDetails>>({});
+	const [detailsFetchedById, setDetailsFetchedById] = useState<Record<string, boolean>>({});
+	const [viewportIds, setViewportIds] = useState<Set<string>>(() => new Set());
+	const observerRef = useRef<IntersectionObserver | null>(null);
+	const workNodeMap = useRef<Map<string, HTMLLIElement>>(new Map());
+	const [activeTabKey, setActiveTabKey] = useState<string>(() => {
+		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
+		return keyFromPath ?? defaultSeasonTab?.key ?? "";
+	});
+	const activeTab = tabConfigs.find((tab) => tab.key === activeTabKey) ?? tabConfigs[0];
+	const activeList = activeTab ? dataByTab[activeTab.key] ?? [] : [];
+	const activeListWithDetails = useMemo(
+		() =>
+			activeList.map((work) => {
+				const details = detailsById[work.id];
+				return details ? { ...work, ...details } : work;
+			}),
+		[activeList, detailsById],
+	);
+	const registerWorkRef = useCallback((id: string) => {
+		return (node: HTMLLIElement | null) => {
+			const observer = observerRef.current;
+			if (node) {
+				workNodeMap.current.set(id, node);
+				if (observer) observer.observe(node);
+				return;
+			}
+			const existing = workNodeMap.current.get(id);
+			if (existing && observer) observer.unobserve(existing);
+			workNodeMap.current.delete(id);
+		};
+	}, []);
+	const activeLoading = activeTab ? loadingByTab[activeTab.key] ?? false : false;
+	const activeError = activeTab ? errorByTab[activeTab.key] ?? null : null;
+	const activeFetched = activeTab ? fetchedByTab[activeTab.key] ?? false : false;
+	const reactionCounts = useReactionCounts(activeListWithDetails.map((work) => work.id));
+	const visibleList = useMemo(() => {
+		const selectedSeasonKey =
+			activeTab?.type === "season" ? seasonKeyValue(activeTab.season.year, activeTab.season.idx) : null;
+
+		return [...activeListWithDetails].sort((a, b) => {
+			const aSeason = startSeason(a.startDate);
+			const bSeason = startSeason(b.startDate);
+			const aKey = aSeason ? seasonKeyValue(aSeason.year, aSeason.idx) : null;
+			const bKey = bSeason ? seasonKeyValue(bSeason.year, bSeason.idx) : null;
+			const aIsEarlier = selectedSeasonKey !== null && aKey !== null && aKey < selectedSeasonKey;
+			const bIsEarlier = selectedSeasonKey !== null && bKey !== null && bKey < selectedSeasonKey;
+
+			if (aIsEarlier !== bIsEarlier) {
+				return aIsEarlier ? 1 : -1;
+			}
+
+			const countDiff = (reactionCounts.get(b.id) ?? 0) - (reactionCounts.get(a.id) ?? 0);
+			if (countDiff !== 0) return countDiff;
+			return (a.startDate ?? "").localeCompare(b.startDate ?? "");
+		});
+	}, [activeListWithDetails, reactionCounts, activeTab]);
+	const viewportEntityIds = useMemo(() => {
+		if (castId) return [];
+		const ids = new Set<string>();
+		visibleList.forEach((work) => {
+			if (!viewportIds.has(work.id)) return;
+			if (work.id) ids.add(work.id);
+			work.voiceActors.forEach((actor) => ids.add(actor.id));
+			work.productionCompanies.forEach((company) => ids.add(company.id));
+			work.directors.forEach((person) => ids.add(person.id));
+			work.screenwriters.forEach((person) => ids.add(person.id));
+			work.composers.forEach((person) => ids.add(person.id));
+		});
+		return Array.from(ids);
+	}, [castId, visibleList, viewportIds]);
+	useThingstrEntityReactions(viewportEntityIds);
+	const emptyMessage = `${activeTab?.label ?? "選択したクール"}の作品が見つかりませんでした。`;
+
+	useEffect(() => {
+		const handlePopState = () => setPathname(window.location.pathname);
+		window.addEventListener("popstate", handlePopState);
+		return () => window.removeEventListener("popstate", handlePopState);
+	}, []);
+
+	useEffect(() => {
+		setDataByTab((prev) => ensureTabKeys(prev, tabConfigs, () => []));
+		setLoadingByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
+		setFetchedByTab((prev) => ensureTabKeys(prev, tabConfigs, () => false));
+		setErrorByTab((prev) => ensureTabKeys(prev, tabConfigs, () => null));
+	}, [tabConfigs]);
+
+	useEffect(() => {
+		if (castId) return;
+		const keyFromPath = seasonKeyFromPathname(pathname, basePath);
+		const nextKey = keyFromPath ?? defaultSeasonTab?.key ?? "";
+		if (nextKey && nextKey !== activeTabKey) {
+			setActiveTabKey(nextKey);
+		}
+	}, [activeTabKey, basePath, castId, defaultSeasonTab, pathname]);
+
+	useEffect(() => {
+		if (castId) return;
+		if (!activeTab || activeTab.type !== "season") return;
+		const nextPath = joinBasePath(basePath, seasonPath(activeTab.season));
+		if (window.location.pathname !== nextPath) {
+			window.history.replaceState(null, "", nextPath);
+			setPathname(nextPath);
+		}
+	}, [activeTab, basePath, castId]);
+
+	useEffect(() => {
+		if (castId) return;
+		const controller = new AbortController();
+		const fetchWorks = async () => {
+			if (!activeTab) return;
+			if (dataByTab[activeTab.key]?.length > 0) return;
+			setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: true }));
+			setErrorByTab((prev) => ({ ...prev, [activeTab.key]: null }));
+			try {
+				const query = buildSeasonQuery(activeTab.season);
+				const response = await fetch(
+					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
+					{
+						method: "GET",
+						signal: controller.signal,
+						headers: {
+							Accept: "application/ld+json",
+						},
+					},
+				);
+
+				const responseText = await response.text();
+				const contentType = response.headers.get("content-type") ?? "unknown";
+				if (!response.ok) {
+					throw new Error(
+						`Wikidata request failed with status ${response.status} (${contentType}).`,
+					);
+				}
+
+				let data: any;
+				try {
+					data = JSON.parse(responseText);
+				} catch {
+					throw new Error(`Wikidata response was not JSON-LD (${contentType}).`);
+				}
+				const mapped = mapWorksFromJsonLd(data);
+
+				const sorted = sortByStartDate(mapped.filter((work) => Boolean(work.startDate)), "asc");
+
+				setDataByTab((prev) => ({ ...prev, [activeTab.key]: sorted }));
+			} catch (err) {
+				if (controller.signal.aborted) return;
+				setErrorByTab((prev) => ({
+					...prev,
+					[activeTab.key]: err instanceof Error ? err.message : "Failed to fetch data",
+				}));
+			} finally {
+				if (!controller.signal.aborted) {
+					setLoadingByTab((prev) => ({ ...prev, [activeTab.key]: false }));
+					setFetchedByTab((prev) => ({ ...prev, [activeTab.key]: true }));
+				}
+			}
+		};
+
+		fetchWorks();
+		return () => controller.abort();
+	}, [activeTab, castId, dataByTab]);
+
+	useEffect(() => {
+		const observer = new IntersectionObserver(
+			(entries) => {
+				setViewportIds((prev) => {
+					let changed = false;
+					const next = new Set(prev);
+					for (const entry of entries) {
+						const id = (entry.target as HTMLElement).dataset.workId;
+						if (!id) continue;
+						if (entry.isIntersecting) {
+							if (!next.has(id)) {
+								next.add(id);
+								changed = true;
+							}
+						} else if (next.delete(id)) {
+							changed = true;
+						}
+					}
+					return changed ? next : prev;
+				});
+			},
+			{ root: null, rootMargin: "0px 0px 200px 0px", threshold: 0.1 },
+		);
+		observerRef.current = observer;
+		for (const node of workNodeMap.current.values()) {
+			observer.observe(node);
+		}
+		return () => {
+			observer.disconnect();
+			observerRef.current = null;
+			setViewportIds(new Set());
+		};
+	}, []);
+
+	useEffect(() => {
+		if (castId) return;
+		const controller = new AbortController();
+		const fetchDetails = async () => {
+			if (visibleList.length === 0) return;
+			const targetIds = visibleList
+				.filter((work) => viewportIds.has(work.id))
+				.map((work) => work.id)
+				.filter(Boolean);
+			const missingIds = targetIds.filter((id) => !detailsFetchedById[id]);
+			if (missingIds.length === 0) return;
+
+			try {
+				const query = buildWorkDetailsQuery(missingIds);
+				if (!query) return;
+				const response = await fetch(
+					`https://query.wikidata.org/sparql?query=${encodeURIComponent(query)}`,
+					{
+						method: "GET",
+						signal: controller.signal,
+						headers: {
+							Accept: "application/ld+json",
+						},
+					},
+				);
+
+				const responseText = await response.text();
+				const contentType = response.headers.get("content-type") ?? "unknown";
+				if (!response.ok) {
+					throw new Error(
+						`Wikidata request failed with status ${response.status} (${contentType}).`,
+					);
+				}
+
+				let data: any;
+				try {
+					data = JSON.parse(responseText);
+				} catch {
+					throw new Error(`Wikidata response was not JSON-LD (${contentType}).`);
+				}
+
+				const detailWorks = mapWorksFromJsonLd(data);
+				const detailMap = new Map(
+					detailWorks.map((work) => [
+						work.id,
+						{
+							voiceActors: work.voiceActors,
+							productionCompanies: work.productionCompanies,
+							directors: work.directors,
+							screenwriters: work.screenwriters,
+							composers: work.composers,
+						} satisfies WorkDetails,
+					]),
+				);
+
+				setDetailsById((prev) => {
+					const next = { ...prev };
+					for (const id of missingIds) {
+						next[id] = detailMap.get(id) ?? prev[id] ?? EMPTY_WORK_DETAILS;
+					}
+					return next;
+				});
+			} catch {
+				if (controller.signal.aborted) return;
+				setDetailsById((prev) => {
+					const next = { ...prev };
+					for (const id of missingIds) {
+						next[id] = prev[id] ?? EMPTY_WORK_DETAILS;
+					}
+					return next;
+				});
+			} finally {
+				if (!controller.signal.aborted) {
+					setDetailsFetchedById((prev) => {
+						const next = { ...prev };
+						for (const id of missingIds) {
+							next[id] = true;
+						}
+						return next;
+					});
+				}
+			}
+		};
+
+		fetchDetails();
+		return () => controller.abort();
 	}, [visibleList, detailsFetchedById, viewportIds]);
 
 	return (
 		<div className="min-h-screen bg-base-200 text-base-content">
 			<Navbar />
 			<main className="container mx-auto px-4 py-10">
-				<div className="space-y-6">
-					<section className="space-y-4">
-						<div className="card bg-base-100 shadow-sm">
-							<div className="card-body">
-								<div role="tablist" className="tabs tabs-box">
-									{tabConfigs.map((tab) => (
-										<button
-											key={tab.key}
-											type="button"
-											role="tab"
-											className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""} ${
-												currentSeasonKey === tab.key ? "font-bold" : ""
-											}`}
-											aria-selected={activeTab?.key === tab.key}
-											onClick={() => {
-												if (tab.type === "season") {
-													const nextPath = joinBasePath(basePath, seasonPath(tab.season));
-													if (window.location.pathname !== nextPath) {
-														window.history.pushState(null, "", nextPath);
-														setPathname(nextPath);
+				{castId ? (
+					<CastPage castId={castId} />
+				) : (
+					<div className="space-y-6">
+						<section className="space-y-4">
+							<div className="card bg-base-100 shadow-sm">
+								<div className="card-body">
+									<div role="tablist" className="tabs tabs-box">
+										{tabConfigs.map((tab) => (
+											<button
+												key={tab.key}
+												type="button"
+												role="tab"
+												className={`tab text-sm ${activeTab?.key === tab.key ? "tab-active" : ""} ${
+													currentSeasonKey === tab.key ? "font-bold" : ""
+												}`}
+												aria-selected={activeTab?.key === tab.key}
+												onClick={() => {
+													if (tab.type === "season") {
+														const nextPath = joinBasePath(basePath, seasonPath(tab.season));
+														if (window.location.pathname !== nextPath) {
+															window.history.pushState(null, "", nextPath);
+															setPathname(nextPath);
+														}
 													}
-												}
-												setActiveTabKey(tab.key);
-											}}
-										>
-											{tab.label}
-										</button>
-									))}
+													setActiveTabKey(tab.key);
+												}}
+											>
+												{tab.label}
+											</button>
+										))}
+									</div>
 								</div>
 							</div>
-						</div>
 
-						<div className="space-y-4">
-							{activeError && (
-								<div className="alert alert-error">
-									<span>Failed to load: {activeError}</span>
-								</div>
-							)}
+							<div className="space-y-4">
+								{activeError && (
+									<div className="alert alert-error">
+										<span>Failed to load: {activeError}</span>
+									</div>
+								)}
 
-							{activeLoading && !activeError && (
-								<div className="flex justify-center py-4">
-									<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
-								</div>
-							)}
+								{activeLoading && !activeError && (
+									<div className="flex justify-center py-4">
+										<span className="loading loading-spinner loading-lg text-primary" aria-label="Loading" />
+									</div>
+								)}
 
-							{!activeLoading && !activeError && activeFetched && (
-								<>
-									{visibleList.length === 0 ? (
-										<p className="text-sm text-base-content/70">{emptyMessage}</p>
-									) : (
-										<ul className="grid gap-4">
-											{visibleList.map((work) => (
-												<WorkCard key={work.id || work.url} ref={registerWorkRef(work.id)} {...work} />
-											))}
-										</ul>
-									)}
-								</>
-							)}
-						</div>
-					</section>
-				</div>
+								{!activeLoading && !activeError && activeFetched && (
+									<>
+										{visibleList.length === 0 ? (
+											<p className="text-sm text-base-content/70">{emptyMessage}</p>
+										) : (
+											<ul className="grid gap-4">
+												{visibleList.map((work) => (
+													<WorkCard key={work.id || work.url} ref={registerWorkRef(work.id)} {...work} />
+												))}
+											</ul>
+										)}
+									</>
+								)}
+							</div>
+						</section>
+					</div>
+				)}
 			</main>
 		</div>
 	);
