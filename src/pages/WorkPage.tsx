@@ -29,7 +29,7 @@ function WorkPage({ basePath, workId }: WorkPageProps) {
 					<div className="card-body">
 						<div className="space-y-1">
 							<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-								<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
+								<h2 className="text-xl font-semibold">作品: {work?.title ?? workId}</h2>
 								<a
 									className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
 									href={work?.url ?? `https://www.wikidata.org/entity/${workId}`}

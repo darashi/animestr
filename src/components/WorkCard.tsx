@@ -31,7 +31,7 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 		<li ref={ref} data-work-id={id} className="card bg-base-100 shadow-sm border border-base-200">
 			<div className="card-body">
 				<div className="space-y-1">
-					<h3 className="card-title text-base leading-tight">
+					<h3 className="card-title text-lg leading-tight">
 						<span className="flex flex-wrap items-center gap-2 break-words">
 							{workLink ? <a className="link link-hover" href={workLink}>{title}</a> : title}
 							<span className="inline-flex items-center gap-3">
