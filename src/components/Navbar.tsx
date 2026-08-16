@@ -3,8 +3,13 @@ import useNip07Auth from "../hooks/useNip07Auth";
 import useProfile from "../hooks/useProfile";
 import { formatShortPubkey } from "../lib/nostr";
 import { buildHomePath } from "../lib/routes";
+import SearchBar from "./SearchBar";
 
-function Navbar() {
+type NavbarProps = {
+	navigate: (path: string) => void;
+};
+
+function Navbar({ navigate }: NavbarProps) {
 	const basePath = import.meta.env.BASE_URL ?? "/";
 	const { session, isLoggingIn, error, login, logout, clearError } =
 		useNip07Auth();
@@ -14,13 +19,18 @@ function Navbar() {
 	return (
 		<>
 			<header className="bg-base-100 shadow-sm">
-				<div className="navbar container mx-auto px-4">
-					<div className="navbar-start">
+				<div className="navbar container mx-auto flex-wrap gap-2 px-4">
+					<div className="flex-none">
 						<a className="btn btn-ghost text-xl font-bold" href={buildHomePath(basePath)}>
 							animestr
 						</a>
 					</div>
-					<div className="navbar-end">
+					<SearchBar
+						basePath={basePath}
+						navigate={navigate}
+						className="order-last w-full flex-none sm:order-none sm:min-w-0 sm:flex-1"
+					/>
+					<div className="ml-auto flex-none sm:ml-0">
 						{session ? (
 							<details className="dropdown dropdown-end">
 								<summary className="btn btn-ghost btn-sm gap-2">

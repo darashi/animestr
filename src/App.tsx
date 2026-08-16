@@ -69,7 +69,7 @@ function App() {
 
 	return (
 		<div className="min-h-screen bg-base-200 text-base-content">
-			<Navbar />
+			<Navbar navigate={navigate} />
 			<main className="container mx-auto px-4 py-10">
 				{workId ? <WorkPage key={workId} basePath={basePath} workId={workId} /> : null}
 				{entityPage ? (
