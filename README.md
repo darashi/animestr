@@ -32,4 +32,20 @@ bun run test
 
 ## Deployment
 
-The application uses client-side routes such as `/seasons/2026Q3`, `/casts/Q123`, and `/companies/Q456`. Configure the web server to serve `index.html` for those paths.
+The application is configured for deployment to Cloudflare Workers with Static Assets.
+
+Authenticate Wrangler once, then deploy:
+
+```sh
+bunx wrangler login
+bun run deploy
+```
+
+Wrangler prints the deployed `workers.dev` URL after a successful deployment. The configuration serves `index.html` for client-side routes such as `/seasons/2026Q3`, `/casts/Q123`, and `/companies/Q456`.
+
+To deploy from the Cloudflare dashboard, connect the repository to a Workers Builds project and use these settings:
+
+- Build command: `bun run build`
+- Deploy command: `bunx wrangler deploy`
+
+The public relay defaults are compiled into the build from `.env`. Override them in Cloudflare's build variables with `VITE_PROFILE_RELAYS` and `VITE_THINGSTR_RELAYS` when needed.
