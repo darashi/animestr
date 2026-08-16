@@ -39,7 +39,8 @@ function Navbar({ navigate }: NavbarProps) {
 				<div className="navbar container mx-auto flex-wrap gap-2 px-4">
 					<div className="flex-none">
 						<a className="btn btn-ghost text-xl font-bold" href={buildHomePath(basePath)}>
-							animestr
+							<span className="mx-0 text-primary">anime</span>
+							<span className="-mx-1.5">str</span>
 						</a>
 					</div>
 					<SearchBar
