@@ -107,19 +107,3 @@ export function formatDate(date?: string) {
 	if (!date) return undefined;
 	return date.slice(0, 10);
 }
-
-// Export internals for testing
-export const _internal = {
-	monthToSeasonIdx,
-	parseDate,
-	shiftDays,
-	toSeasonStart,
-	toSeasonEnd,
-	seasonNames,
-	seasonBadges,
-	badgeClassForSeason,
-	seasonFromYearIdx,
-	shiftSeason,
-	seasonKeyValue,
-	seasonLabel,
-};

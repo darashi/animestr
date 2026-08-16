@@ -8,6 +8,7 @@
         "@tabler/icons-react": "^3.35.0",
         "applesauce-core": "^4.4.2",
         "applesauce-relay": "^4.4.2",
+        "nostr-tools": "^2.17.4",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
       },

@@ -49,10 +49,10 @@ export function buildWorkDetailsQuery(ids: string[]) {
 	return `
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 CONSTRUCT {
-	?item wdt:P725 ?cast.
 	?item p:P725 ?castStatement.
 	?castStatement ps:P725 ?cast.
 	?castStatement pq:P453 ?role.
+	?castStatement a wikibase:BestRank.
 	?item wdt:P272 ?company.
 	?item wdt:P57 ?director.
 	?item wdt:P58 ?screenwriter.
@@ -65,16 +65,16 @@ CONSTRUCT {
 	?composer rdfs:label ?composerLabel.
 } WHERE {
 	VALUES ?item { ${values} }
-	OPTIONAL { ?item wdt:P725 ?cast. }
-	OPTIONAL {
+	{
 		?item p:P725 ?castStatement.
-		?castStatement ps:P725 ?cast.
+		?castStatement ps:P725 ?cast;
+		               a wikibase:BestRank.
 		OPTIONAL { ?castStatement pq:P453 ?role. }
 	}
-	OPTIONAL { ?item wdt:P272 ?company. }
-	OPTIONAL { ?item wdt:P57 ?director. }
-	OPTIONAL { ?item wdt:P58 ?screenwriter. }
-	OPTIONAL { ?item wdt:P86 ?composer. }
+	UNION { ?item wdt:P272 ?company. }
+	UNION { ?item wdt:P57 ?director. }
+	UNION { ?item wdt:P58 ?screenwriter. }
+	UNION { ?item wdt:P86 ?composer. }
 	SERVICE wikibase:label { bd:serviceParam wikibase:language "ja,en". }
 }
 `;

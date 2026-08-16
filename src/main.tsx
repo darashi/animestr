@@ -4,19 +4,17 @@ import "./index.css";
 import App from "./App";
 import EventStoreProvider from "./providers/EventStoreProvider";
 import RelayPoolProvider from "./providers/RelayPoolProvider";
-import useThingstrReactionsSubscription from "./hooks/useThingstrReactionsSubscription";
-
-function NostrBootstrap() {
-	useThingstrReactionsSubscription();
-	return null;
-}
+import NostrBootstrap from "./components/NostrBootstrap";
+import WikidataReactionsProvider from "./providers/WikidataReactionsProvider";
 
 createRoot(document.getElementById("root")!).render(
 	<StrictMode>
 		<RelayPoolProvider>
 			<EventStoreProvider>
-				<NostrBootstrap />
-				<App />
+				<WikidataReactionsProvider>
+					<NostrBootstrap />
+					<App />
+				</WikidataReactionsProvider>
 			</EventStoreProvider>
 		</RelayPoolProvider>
 	</StrictMode>,

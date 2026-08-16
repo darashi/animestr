@@ -1,9 +1,13 @@
+import { buildHomePath } from "../lib/routes";
+
 function Navbar() {
+	const basePath = import.meta.env.BASE_URL ?? "/";
+
 	return (
 		<header className="bg-base-100 shadow-sm">
 			<div className="navbar container mx-auto px-4">
 				<div className="navbar-start">
-					<a className="btn btn-ghost text-xl font-bold" href="/">
+					<a className="btn btn-ghost text-xl font-bold" href={buildHomePath(basePath)}>
 						animestr
 					</a>
 				</div>
