@@ -6,7 +6,7 @@ import {
 
 describe("Wikidata reaction event templates", () => {
 	it("builds a NIP-25 external content reaction", () => {
-		expect(buildWikidataReactionTemplate("Q42", 123)).toEqual({
+		expect(buildWikidataReactionTemplate("Q42", "+", 123)).toEqual({
 			kind: 17,
 			created_at: 123,
 			content: "+",
@@ -15,6 +15,10 @@ describe("Wikidata reaction event templates", () => {
 				["i", "wd:Q42"],
 			],
 		});
+	});
+
+	it("preserves an emoji reaction in the event content", () => {
+		expect(buildWikidataReactionTemplate("Q42", "🔥", 123).content).toBe("🔥");
 	});
 
 	it("builds one NIP-09 deletion request for all duplicate reactions", () => {
@@ -33,7 +37,7 @@ describe("Wikidata reaction event templates", () => {
 	});
 
 	it("rejects empty reaction targets", () => {
-		expect(() => buildWikidataReactionTemplate("", 1)).toThrow();
+		expect(() => buildWikidataReactionTemplate("", "+", 1)).toThrow();
 		expect(() => buildReactionDeletionTemplate([], 1)).toThrow();
 	});
 });

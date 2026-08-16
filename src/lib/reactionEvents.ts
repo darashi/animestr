@@ -1,4 +1,5 @@
 import type { EventTemplate } from "nostr-tools/pure";
+import { normalizeReactionContent } from "./reactions";
 import { withWikidataPrefix } from "./wikidata";
 
 export const WIKIDATA_REACTION_KIND = 17;
@@ -9,6 +10,7 @@ function unixTime() {
 
 export function buildWikidataReactionTemplate(
 	entityId: string,
+	content = "+",
 	createdAt = unixTime(),
 ): EventTemplate {
 	const externalId = withWikidataPrefix(entityId);
@@ -16,7 +18,7 @@ export function buildWikidataReactionTemplate(
 	return {
 		kind: WIKIDATA_REACTION_KIND,
 		created_at: createdAt,
-		content: "+",
+		content: normalizeReactionContent(content),
 		tags: [
 			["k", "wikidata"],
 			["i", externalId],

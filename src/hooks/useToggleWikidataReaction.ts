@@ -7,6 +7,7 @@ import {
 	buildWikidataReactionTemplate,
 } from "../lib/reactionEvents";
 import { ingestRelayEvent } from "../lib/reactionEventStore";
+import { normalizeReactionContent } from "../lib/reactions";
 import useEventStore from "./useEventStore";
 import useNip07Auth from "./useNip07Auth";
 import useRelayPool from "./useRelayPool";
@@ -17,31 +18,46 @@ function useToggleWikidataReaction(entityId: string) {
 	const relayPool = useRelayPool();
 	const { session } = useNip07Auth();
 	const reactions = useWikidataReactionsForEntity(entityId);
-	const [isSaving, setIsSaving] = useState(false);
+	const [savingContent, setSavingContent] = useState<string | null>(null);
+	const isSaving = savingContent !== null;
 
-	const ownReactionEventIds = useMemo(() => {
-		if (!session?.pubkey) return [];
-		return reactions
-			.filter((reaction) => {
-				const pubkey = normalizePubkey(reaction.pubkey) ?? reaction.pubkey;
-				return pubkey === session.pubkey;
-			})
-			.map((reaction) => reaction.event.id);
+	const ownReactionEventIdsByContent = useMemo(() => {
+		const byContent = new Map<string, string[]>();
+		if (!session?.pubkey) return byContent;
+		reactions.forEach((reaction) => {
+			const pubkey = normalizePubkey(reaction.pubkey) ?? reaction.pubkey;
+			if (pubkey !== session.pubkey) return;
+			const content = normalizeReactionContent(reaction.content);
+			const ids = byContent.get(content) ?? [];
+			ids.push(reaction.event.id);
+			byContent.set(content, ids);
+		});
+		return byContent;
 	}, [reactions, session?.pubkey]);
-	const isReacted = ownReactionEventIds.length > 0;
-
-	const toggle = useCallback(async () => {
+	const ownReactionContents = useMemo(
+		() => [...ownReactionEventIdsByContent.keys()],
+		[ownReactionEventIdsByContent],
+	);
+	const hasReaction = useCallback(
+		(content: string) =>
+			ownReactionEventIdsByContent.has(normalizeReactionContent(content)),
+		[ownReactionEventIdsByContent],
+	);
+	const toggle = useCallback(async (content = "+") => {
 		if (!session?.pubkey) throw new Error("Nostr login is required");
 		if (THINGSTR_RELAYS.length === 0) {
 			throw new Error("No reaction relay is configured");
 		}
 		if (isSaving) return;
 
-		setIsSaving(true);
+		const normalizedContent = normalizeReactionContent(content);
+		setSavingContent(normalizedContent);
 		try {
-			const template = isReacted
+			const ownReactionEventIds =
+				ownReactionEventIdsByContent.get(normalizedContent) ?? [];
+			const template = ownReactionEventIds.length > 0
 				? buildReactionDeletionTemplate(ownReactionEventIds)
-				: buildWikidataReactionTemplate(entityId);
+				: buildWikidataReactionTemplate(entityId, normalizedContent);
 			const event = await signEventWithNip07(template, session.pubkey);
 			const responses = await relayPool.publish(THINGSTR_RELAYS, event, {
 				timeout: 15_000,
@@ -52,22 +68,22 @@ function useToggleWikidataReaction(entityId: string) {
 			}
 			ingestRelayEvent(eventStore, event);
 		} finally {
-			setIsSaving(false);
+			setSavingContent(null);
 		}
 	}, [
 		entityId,
 		eventStore,
-		isReacted,
 		isSaving,
-		ownReactionEventIds,
+		ownReactionEventIdsByContent,
 		relayPool,
 		session?.pubkey,
 	]);
 
 	return {
 		isLoggedIn: Boolean(session?.pubkey),
-		isReacted,
 		isSaving,
+		hasReaction,
+		ownReactionContents,
 		toggle,
 	};
 }

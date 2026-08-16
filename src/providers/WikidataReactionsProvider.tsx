@@ -7,6 +7,7 @@ import {
 	isEventDeleted,
 	subscribeReactionDeletionEvents,
 } from "../lib/reactionEventStore";
+import { normalizeReactionContent } from "../lib/reactions";
 import { stripWikidataPrefix } from "../lib/wikidata";
 import {
 	WikidataReactionsContext,
@@ -22,7 +23,12 @@ function reactionFromEvent(event: ReactionEvent): WikidataReaction | null {
 	const entityTag = event.tags.find(([key, value]) => key === "i" && typeof value === "string");
 	const entityId = entityTag?.[1] ? stripWikidataPrefix(entityTag[1]) : "";
 	if (!entityId) return null;
-	return { event, entityId, pubkey: event.pubkey };
+	return {
+		event,
+		entityId,
+		pubkey: event.pubkey,
+		content: normalizeReactionContent(event.content),
+	};
 }
 
 function WikidataReactionsProvider({ children }: { children: ReactNode }) {

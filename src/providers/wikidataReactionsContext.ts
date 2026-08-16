@@ -7,6 +7,7 @@ export type WikidataReaction = {
 	event: ReactionEvent;
 	entityId: string;
 	pubkey: string;
+	content: string;
 };
 
 export type WikidataReactionsValue = {

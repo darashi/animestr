@@ -1,6 +1,7 @@
-import { IconStar, IconStarFilled } from "@tabler/icons-react";
 import useToggleWikidataReaction from "../hooks/useToggleWikidataReaction";
 import useWorkReactions from "../hooks/useWorkReactions";
+import { isLikeReaction } from "../lib/reactions";
+import EmojiReactionPicker from "./EmojiReactionPicker";
 import ReactionAvatarStack from "./ReactionAvatarStack";
 
 type EntityReactionControlProps = {
@@ -15,50 +16,45 @@ function EntityReactionControl({
 	sizeClassName,
 }: EntityReactionControlProps) {
 	const { reactions } = useWorkReactions(entityId);
-	const { isLoggedIn, isReacted, isSaving, toggle } =
+	const {
+		isLoggedIn,
+		isSaving,
+		hasReaction,
+		ownReactionContents,
+		toggle,
+	} =
 		useToggleWikidataReaction(entityId);
-	const label = !isLoggedIn
-		? "Log in with Nostr to react"
-		: isReacted
-			? "Remove reaction"
-			: "React";
 
-	const handleToggle = () => {
-		void toggle().catch((error) => {
+	const handleToggle = async (content: string) => {
+		try {
+			await toggle(content);
+		} catch (error) {
 			console.error("Failed to save Wikidata reaction", error);
 			window.alert(
 				"Failed to save the reaction. Check your Nostr signer and relay connection.",
 			);
-		});
+			throw error;
+		}
 	};
+	const ownEmojiReactionContents = ownReactionContents.filter(
+		(content) => !isLikeReaction(content),
+	);
 
 	if (!entityId) return null;
 
 	return (
 		<span className="inline-flex items-center gap-1">
-			<span className="tooltip tooltip-left" data-tip={label}>
-				<button
-					type="button"
-					className={`btn btn-ghost btn-circle btn-xs ${isReacted ? "text-primary" : "text-base-content/50"}`}
-					onClick={handleToggle}
-					disabled={!isLoggedIn || isSaving}
-					aria-label={label}
-					aria-pressed={isReacted}
-					aria-busy={isSaving}
-				>
-					{isSaving ? (
-						<span className="loading loading-spinner loading-xs" />
-					) : isReacted ? (
-						<IconStarFilled size={16} />
-					) : (
-						<IconStar size={16} />
-					)}
-				</button>
-			</span>
 			<ReactionAvatarStack
 				reactions={reactions}
 				limit={limit}
 				sizeClassName={sizeClassName}
+			/>
+			<EmojiReactionPicker
+				isLoggedIn={isLoggedIn}
+				isSaving={isSaving}
+				ownEmojiReactionContents={ownEmojiReactionContents}
+				hasReaction={hasReaction}
+				onToggle={handleToggle}
 			/>
 		</span>
 	);

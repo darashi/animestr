@@ -40,7 +40,7 @@ function CompactEntity({ id, name, linkPath, suffix }: CompactEntityProps) {
 			</span>
 			{id ? (
 				<span className="join-item inline-flex items-center border border-base-300 bg-base-200 px-1">
-					<EntityReactionControl entityId={id} limit={3} sizeClassName="w-5 h-5" />
+					<EntityReactionControl entityId={id} limit={3} sizeClassName="w-6 h-6" />
 				</span>
 			) : null}
 		</span>
