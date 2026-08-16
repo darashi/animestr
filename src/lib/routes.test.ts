@@ -6,6 +6,7 @@ import {
 	buildHomePath,
 	buildSeasonPath,
 	buildStaffPath,
+	buildWorkPath,
 	parseRoute,
 } from "./routes";
 
@@ -17,6 +18,7 @@ describe("route helpers", () => {
 		expect(buildHomePath("/animestr/")).toBe("/animestr/");
 		expect(buildSeasonPath("/", season)).toBe("/seasons/2025Q2");
 		expect(buildSeasonPath("/animestr/", season)).toBe("/animestr/seasons/2025Q2");
+		expect(buildWorkPath("/animestr/", "Q10")).toBe("/animestr/works/Q10");
 		expect(buildCastPath("/animestr/", "Q1")).toBe("/animestr/casts/Q1");
 		expect(buildStaffPath("/animestr/", "Q2")).toBe("/animestr/staffs/Q2");
 		expect(buildCompanyPath("/animestr/", "Q3")).toBe("/animestr/companies/Q3");
@@ -24,6 +26,8 @@ describe("route helpers", () => {
 
 	it("normalizes base paths while building URLs", () => {
 		expect(buildHomePath("animestr")).toBe("/animestr/");
+		expect(buildWorkPath("/animestr", "Q1")).toBe("/animestr/works/Q1");
+		expect(buildWorkPath("/animestr", "")).toBe("");
 		expect(buildCastPath("/animestr", "Q1")).toBe("/animestr/casts/Q1");
 		expect(buildCastPath("/animestr/", "")).toBe("");
 	});
@@ -40,6 +44,7 @@ describe("route helpers", () => {
 	});
 
 	it.each([
+		["/animestr/works/Q10", { type: "work", workId: "Q10" }],
 		["/animestr/casts/Q1", { type: "cast", entityId: "Q1" }],
 		["/animestr/staffs/Q2/", { type: "staff", entityId: "Q2" }],
 		["/animestr/companies/Q3", { type: "company", entityId: "Q3" }],
@@ -49,6 +54,7 @@ describe("route helpers", () => {
 
 	it.each([
 		"/animestr/seasons/2025Q5",
+		"/animestr/works/q10",
 		"/animestr/casts/q1",
 		"/animestr/staffs/P1",
 		"/animestr/companies/Q1/extra",

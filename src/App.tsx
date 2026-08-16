@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Navbar from "./components/Navbar";
 import EntityWorksPage from "./pages/EntityWorksPage";
 import SeasonWorksPage from "./pages/SeasonWorksPage";
+import WorkPage from "./pages/WorkPage";
 import {
 	buildCastWorksQuery,
 	buildCompanyWorksQuery,
@@ -17,7 +18,7 @@ type EntityPageConfig = {
 };
 
 function entityPageForRoute(route: AppRoute | null): EntityPageConfig | null {
-	if (!route || route.type === "season") return null;
+	if (!route || route.type === "season" || route.type === "work") return null;
 
 	switch (route.type) {
 		case "cast":
@@ -49,6 +50,7 @@ function App() {
 	const [pathname, setPathname] = useState(() => window.location.pathname);
 	const route = useMemo(() => parseRoute(pathname, basePath), [basePath, pathname]);
 	const entityPage = useMemo(() => entityPageForRoute(route), [route]);
+	const workId = route?.type === "work" ? route.workId : null;
 	const navigate = useCallback((path: string, options?: { replace?: boolean }) => {
 		if (window.location.pathname === path) return;
 		if (options?.replace) {
@@ -69,6 +71,7 @@ function App() {
 		<div className="min-h-screen bg-base-200 text-base-content">
 			<Navbar />
 			<main className="container mx-auto px-4 py-10">
+				{workId ? <WorkPage key={workId} basePath={basePath} workId={workId} /> : null}
 				{entityPage ? (
 					<EntityWorksPage
 						key={entityPage.key}
@@ -78,7 +81,7 @@ function App() {
 					/>
 				) : null}
 				<SeasonWorksPage
-					active={!entityPage}
+					active={!entityPage && !workId}
 					basePath={basePath}
 					pathSeason={route?.type === "season" ? route.season : null}
 					navigate={navigate}
