@@ -14,7 +14,10 @@ type EntityWorksPageProps = {
 };
 
 function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorksPageProps) {
-	const { works, entityName, loading, error } = useEntityWorks(entityId, buildWorksQuery);
+	const { works, entityName, entityDescription, loading, error } = useEntityWorks(
+		entityId,
+		buildWorksQuery,
+	);
 	const { visibleIds, registerWorkRef } = useVisibleWorkIds();
 	const worksWithDetails = useWorkDetails(works, visibleIds);
 	const visibleEntityIds = useMemo(
@@ -29,19 +32,26 @@ function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorks
 			<section className="space-y-4">
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-							<h2 className="text-lg font-semibold">
-								{titlePrefix}: {entityName}
-							</h2>
-							<a
-								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
-								href={`https://www.wikidata.org/entity/${entityId}`}
-								target="_blank"
-								rel="noreferrer"
-							>
-								{entityId}
-							</a>
-							<EntityReactionControl entityId={entityId} />
+						<div className="space-y-1">
+							<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+								<h2 className="text-lg font-semibold">
+									{titlePrefix}: {entityName}
+								</h2>
+								<a
+									className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
+									href={`https://www.wikidata.org/entity/${entityId}`}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{entityId}
+								</a>
+								<EntityReactionControl entityId={entityId} />
+							</div>
+							{entityDescription ? (
+								<p className="text-sm text-base-content/80">{entityDescription}</p>
+							) : loading ? (
+								<div className="skeleton h-4 w-48" />
+							) : null}
 						</div>
 					</div>
 				</div>

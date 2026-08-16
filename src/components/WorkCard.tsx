@@ -9,6 +9,7 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 	{
 		title,
 		id,
+		description,
 		startDate,
 		endDate,
 		url,
@@ -29,23 +30,28 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 	return (
 		<li ref={ref} data-work-id={id} className="card bg-base-100 shadow-sm border border-base-200">
 			<div className="card-body">
-				<h3 className="card-title text-base leading-tight">
-					<span className="flex flex-wrap items-center gap-2 break-words">
-						{workLink ? <a className="link link-hover" href={workLink}>{title}</a> : title}
-						<span className="inline-flex items-center gap-3">
-							<a
-								className="badge badge-outline badge-primary inline-flex align-middle rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
-								href={url}
-								target="_blank"
-								rel="noreferrer"
-							>
-								{id || "Q?"}
-							</a>
-							<EntityReactionControl entityId={id} />
+				<div className="space-y-1">
+					<h3 className="card-title text-base leading-tight">
+						<span className="flex flex-wrap items-center gap-2 break-words">
+							{workLink ? <a className="link link-hover" href={workLink}>{title}</a> : title}
+							<span className="inline-flex items-center gap-3">
+								<a
+									className="badge badge-outline badge-primary inline-flex align-middle rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
+									href={url}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{id || "Q?"}
+								</a>
+								<EntityReactionControl entityId={id} />
+							</span>
 						</span>
-					</span>
-				</h3>
-				<div className="flex items-center gap-2 text-sm text-base-content/70 flex-wrap">
+					</h3>
+					{description ? (
+						<p className="text-sm text-base-content/70">{description}</p>
+					) : null}
+				</div>
+				<div className="mt-2 flex items-center gap-2 text-sm text-base-content/70 flex-wrap">
 					{seasonInfo ? (
 						<span className={`badge align-middle text-xs ${seasonInfo.badgeClass}`}>
 							{seasonInfo.label}

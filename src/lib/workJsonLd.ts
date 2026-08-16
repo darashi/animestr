@@ -2,11 +2,16 @@ import type { VoiceActor, Work, WorkEntity } from "../types/work";
 import { stripWikidataPrefix } from "./wikidata";
 
 type JsonObject = Record<string, unknown>;
-type PropertyKeys = readonly [full: string, compact: string];
+type PropertyKeys = readonly string[];
 
 const UNKNOWN_TITLE = "Unknown title";
 
 const LABEL_KEYS = ["http://www.w3.org/2000/01/rdf-schema#label", "rdfs:label"] as const;
+const DESCRIPTION_KEYS = [
+	"http://schema.org/description",
+	"https://schema.org/description",
+	"schema:description",
+] as const;
 const START_KEYS = ["http://www.wikidata.org/prop/direct/P580", "wdt:P580"] as const;
 const END_KEYS = ["http://www.wikidata.org/prop/direct/P582", "wdt:P582"] as const;
 const CAST_STATEMENT_KEYS = ["http://www.wikidata.org/prop/P725", "p:P725"] as const;
@@ -91,7 +96,7 @@ function labelEntry(value: unknown): LabelEntry | undefined {
 	return language ? { language, value: text } : { value: text };
 }
 
-function pickLabel(value: unknown): string | undefined {
+function pickLocalizedText(value: unknown): string | undefined {
 	const entries = asArray(value)
 		.map(labelEntry)
 		.filter((entry): entry is LabelEntry => entry !== undefined);
@@ -119,22 +124,24 @@ function isWorkNode(node: JsonObject): boolean {
 	return WORK_PROPERTIES.some((keys) => propertyValue(node, keys) !== undefined);
 }
 
-function entityLabelMap(graph: unknown[]): Map<string, string> {
-	const labels = new Map<string, string>();
+function entityTextMap(graph: unknown[], keys: PropertyKeys): Map<string, string> {
+	const values = new Map<string, string>();
 	for (const node of graph) {
 		if (!isJsonObject(node)) continue;
 		const id = resolveEntityId(node);
 		if (!id) continue;
-		const label = pickLabel(propertyValue(node, LABEL_KEYS));
-		if (label) labels.set(id, label);
+		const value = pickLocalizedText(propertyValue(node, keys));
+		if (value) values.set(id, value);
 	}
-	return labels;
+	return values;
 }
 
 function resolveEntity(node: unknown, labels: Map<string, string>): WorkEntity | undefined {
 	const id = resolveEntityId(node);
 	if (!id) return undefined;
-	const inlineLabel = isJsonObject(node) ? pickLabel(propertyValue(node, LABEL_KEYS)) : undefined;
+	const inlineLabel = isJsonObject(node)
+		? pickLocalizedText(propertyValue(node, LABEL_KEYS))
+		: undefined;
 	return { id, name: inlineLabel ?? labels.get(id) ?? id };
 }
 
@@ -200,9 +207,11 @@ function voiceActorsFromStatements(
 export function parseWorkJsonLd(data: unknown): {
 	works: Work[];
 	labels: ReadonlyMap<string, string>;
+	descriptions: ReadonlyMap<string, string>;
 } {
 	const graph = graphFromJsonLd(data);
-	const labels = entityLabelMap(graph);
+	const labels = entityTextMap(graph, LABEL_KEYS);
+	const descriptions = entityTextMap(graph, DESCRIPTION_KEYS);
 	const statements = castStatements(graph);
 	const works: Work[] = [];
 
@@ -219,7 +228,8 @@ export function parseWorkJsonLd(data: unknown): {
 
 		works.push({
 			id,
-			title: pickLabel(propertyValue(node, LABEL_KEYS)) ?? UNKNOWN_TITLE,
+			title: pickLocalizedText(propertyValue(node, LABEL_KEYS)) ?? UNKNOWN_TITLE,
+			description: pickLocalizedText(propertyValue(node, DESCRIPTION_KEYS)),
 			startDate: firstStringValue(propertyValue(node, START_KEYS)),
 			endDate: firstStringValue(propertyValue(node, END_KEYS)),
 			url: rawId.startsWith("http") ? rawId : entityUrlFromId(id),
@@ -231,7 +241,7 @@ export function parseWorkJsonLd(data: unknown): {
 		});
 	}
 
-	return { works, labels };
+	return { works, labels, descriptions };
 }
 
 export function mapWorksFromJsonLd(data: unknown): Work[] {

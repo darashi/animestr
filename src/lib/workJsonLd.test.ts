@@ -9,6 +9,10 @@ const jsonLd = {
 				{ "@language": "en", "@value": "English title" },
 				{ "@language": "ja", "@value": "日本語タイトル" },
 			],
+			"schema:description": [
+				{ "@language": "en", "@value": "English description" },
+				{ "@language": "ja", "@value": "日本語の説明" },
+			],
 			"wdt:P580": { "@value": "2026-04-03T00:00:00Z" },
 			"http://www.wikidata.org/prop/direct/P582": { value: "2026-06-26T00:00:00Z" },
 			"p:P725": [
@@ -55,6 +59,10 @@ const jsonLd = {
 		{
 			"@id": "wd:Q200",
 			"rdfs:label": { "@language": "ja", "@value": "声優A" },
+			"http://schema.org/description": {
+				"@language": "ja",
+				"@value": "日本の声優",
+			},
 		},
 		{
 			"@id": "wd:Q201",
@@ -98,6 +106,7 @@ describe("mapWorksFromJsonLd", () => {
 		expect(work).toMatchObject({
 			id: "Q100",
 			title: "日本語タイトル",
+			description: "日本語の説明",
 			startDate: "2026-04-03T00:00:00Z",
 			endDate: "2026-06-26T00:00:00Z",
 			url: "https://www.wikidata.org/entity/Q100",
@@ -120,10 +129,13 @@ describe("mapWorksFromJsonLd", () => {
 
 describe("parseWorkJsonLd", () => {
 	it("normalizes entity URLs and uses the preferred available label", () => {
-		const { labels } = parseWorkJsonLd(jsonLd);
+		const { labels, descriptions } = parseWorkJsonLd(jsonLd);
 
 		expect(labels.get("Q200")).toBe("声優A");
 		expect(labels.get("Q500")).toBe("Director A");
 		expect(labels.get("Q999")).toBeUndefined();
+		expect(descriptions.get("Q100")).toBe("日本語の説明");
+		expect(descriptions.get("Q200")).toBe("日本の声優");
+		expect(descriptions.get("Q999")).toBeUndefined();
 	});
 });

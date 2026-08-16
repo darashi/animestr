@@ -27,17 +27,24 @@ function WorkPage({ basePath, workId }: WorkPageProps) {
 			<section className="space-y-4">
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
-						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-							<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
-							<a
-								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
-								href={work?.url ?? `https://www.wikidata.org/entity/${workId}`}
-								target="_blank"
-								rel="noreferrer"
-							>
-								{workId}
-							</a>
-							<EntityReactionControl entityId={work?.id ?? workId} />
+						<div className="space-y-1">
+							<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+								<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
+								<a
+									className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
+									href={work?.url ?? `https://www.wikidata.org/entity/${workId}`}
+									target="_blank"
+									rel="noreferrer"
+								>
+									{workId}
+								</a>
+								<EntityReactionControl entityId={work?.id ?? workId} />
+							</div>
+							{work?.description ? (
+								<p className="text-sm text-base-content/80">{work.description}</p>
+							) : loading ? (
+								<div className="skeleton h-4 w-48" />
+							) : null}
 						</div>
 					</div>
 				</div>

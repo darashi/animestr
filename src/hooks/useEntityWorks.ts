@@ -8,6 +8,7 @@ type EntityWorksState = {
 	entityId: string;
 	works: Work[];
 	entityName: string;
+	entityDescription?: string;
 	loading: boolean;
 	error: string | null;
 };
@@ -37,11 +38,12 @@ function useEntityWorks(entityId: string, buildQuery: (entityId: string) => stri
 					return;
 				}
 				const data = await fetchWikidataJsonLd(query, controller.signal);
-				const { works, labels } = parseWorkJsonLd(data);
+				const { works, labels, descriptions } = parseWorkJsonLd(data);
 				setState({
 					entityId,
 					works: sortWorksByStartDate(works, "desc"),
 					entityName: labels.get(entityId) ?? entityId,
+					entityDescription: descriptions.get(entityId),
 					loading: false,
 					error: null,
 				});

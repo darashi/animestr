@@ -11,10 +11,12 @@ export function buildSeasonQuery(season: Season) {
 	return `
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
 CONSTRUCT {
 	?item wdt:P580 ?start;
 	      wdt:P582 ?end;
-	      rdfs:label ?itemLabel.
+	      rdfs:label ?itemLabel;
+	      schema:description ?itemDescription.
 } WHERE {
 	?item wdt:P31/wdt:P279* wd:Q63952888;
 	      wdt:P580 ?start.
@@ -48,10 +50,12 @@ export function buildWorkDetailsQuery(ids: string[]) {
 	const values = ids.map((id) => withWikidataPrefix(id)).join(" ");
 	return `
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
 CONSTRUCT {
 	?item wdt:P580 ?start;
 	      wdt:P582 ?end;
-	      rdfs:label ?itemLabel.
+	      rdfs:label ?itemLabel;
+	      schema:description ?itemDescription.
 	?item p:P725 ?castStatement.
 	?castStatement ps:P725 ?cast.
 	?castStatement pq:P453 ?role.
@@ -91,17 +95,21 @@ function buildEntityWorksQuery(
 	entityId: string,
 	entityVar: string,
 	labelVar: string,
+	descriptionVar: string,
 	linkPattern: string,
 ) {
 	const entity = withWikidataPrefix(entityId);
 	if (!entity) return "";
 	return `
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX schema: <http://schema.org/>
 CONSTRUCT {
 	?item wdt:P580 ?start;
 	      wdt:P582 ?end;
-	      rdfs:label ?itemLabel.
-	${entityVar} rdfs:label ${labelVar}.
+	      rdfs:label ?itemLabel;
+	      schema:description ?itemDescription.
+	${entityVar} rdfs:label ${labelVar};
+	             schema:description ${descriptionVar}.
 } WHERE {
 	VALUES ${entityVar} { ${entity} }
 	?item wdt:P31/wdt:P279* wd:Q63952888;
@@ -117,13 +125,31 @@ LIMIT 200
 }
 
 export function buildCastWorksQuery(castId: string) {
-	return buildEntityWorksQuery(castId, "?cast", "?castLabel", "wdt:P725");
+	return buildEntityWorksQuery(
+		castId,
+		"?cast",
+		"?castLabel",
+		"?castDescription",
+		"wdt:P725",
+	);
 }
 
 export function buildStaffWorksQuery(staffId: string) {
-	return buildEntityWorksQuery(staffId, "?staff", "?staffLabel", "(wdt:P57|wdt:P58|wdt:P86)");
+	return buildEntityWorksQuery(
+		staffId,
+		"?staff",
+		"?staffLabel",
+		"?staffDescription",
+		"(wdt:P57|wdt:P58|wdt:P86)",
+	);
 }
 
 export function buildCompanyWorksQuery(companyId: string) {
-	return buildEntityWorksQuery(companyId, "?company", "?companyLabel", "wdt:P272");
+	return buildEntityWorksQuery(
+		companyId,
+		"?company",
+		"?companyLabel",
+		"?companyDescription",
+		"wdt:P272",
+	);
 }
