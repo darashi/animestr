@@ -25,7 +25,7 @@ function useWorkDetails(works: Work[], visibleWorkIds: ReadonlySet<string>) {
 	);
 	const missingIds = useMemo(
 		() => targetIds.filter(
-			(id) => id && !state.fetchedIds.has(id) && !pendingIdsRef.current.has(id),
+			(id) => id && !state.fetchedIds.has(id),
 		),
 		[state.fetchedIds, targetIds],
 	);
