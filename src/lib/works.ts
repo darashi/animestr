@@ -68,10 +68,15 @@ export function sortSeasonWorks(
 	works: Work[],
 	season: Season,
 	reactionCounts: ReadonlyMap<string, number>,
+	ownReactionIds: ReadonlySet<string>,
 ): Work[] {
 	const selectedSeasonKey = seasonKeyValue(season.year, season.idx);
 
 	return [...works].sort((a, b) => {
+		const aIsOwn = ownReactionIds.has(a.id);
+		const bIsOwn = ownReactionIds.has(b.id);
+		if (aIsOwn !== bIsOwn) return aIsOwn ? -1 : 1;
+
 		const aSeason = startSeason(a.startDate);
 		const bSeason = startSeason(b.startDate);
 		const aKey = aSeason ? seasonKeyValue(aSeason.year, aSeason.idx) : null;

@@ -48,22 +48,27 @@ describe("work collection helpers", () => {
 		expect(merged[1]).toBe(works[1]);
 	});
 
-	it("places earlier-season works last and otherwise sorts by reactions then date", () => {
+	it("sorts own reactions first, then earlier-season works last, reactions, and date", () => {
 		const works = [
-			work("earlier", "2025-01-01"),
+			work("own-earlier", "2025-01-01"),
+			work("earlier", "2025-02-01"),
 			work("popular", "2025-05-01"),
 			work("first", "2025-04-01"),
 		];
 		const counts = new Map([
+			["own-earlier", 1],
 			["earlier", 100],
 			["popular", 3],
 			["first", 1],
 		]);
 
-		expect(sortSeasonWorks(works, seasonFromYearIdx(2025, 1), counts).map(({ id }) => id)).toEqual([
-			"popular",
-			"first",
-			"earlier",
-		]);
+		expect(
+			sortSeasonWorks(
+				works,
+				seasonFromYearIdx(2025, 1),
+				counts,
+				new Set(["own-earlier"]),
+			).map(({ id }) => id),
+		).toEqual(["own-earlier", "popular", "first", "earlier"]);
 	});
 });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import WorkCard from "../components/WorkCard";
-import useReactionCounts from "../hooks/useReactionCounts";
+import useReactionStats from "../hooks/useReactionStats";
 import useThingstrEntityReactions from "../hooks/useThingstrEntityReactions";
 import useVisibleWorkIds from "../hooks/useVisibleWorkIds";
 import useWorkDetails from "../hooks/useWorkDetails";
@@ -61,12 +61,12 @@ function SeasonWorksPage({ active, basePath, pathSeason, navigate }: SeasonWorks
 		() => worksWithDetails.map((work) => work.id),
 		[worksWithDetails],
 	);
-	const reactionCounts = useReactionCounts(reactionEntityIds);
+	const { reactionCounts, ownReactionIds } = useReactionStats(reactionEntityIds);
 	const visibleList = useMemo(
 		() => activeTab
-			? sortSeasonWorks(worksWithDetails, activeTab.season, reactionCounts)
+			? sortSeasonWorks(worksWithDetails, activeTab.season, reactionCounts, ownReactionIds)
 			: [],
-		[activeTab, reactionCounts, worksWithDetails],
+		[activeTab, ownReactionIds, reactionCounts, worksWithDetails],
 	);
 	const visibleEntityIds = useMemo(
 		() => active ? collectVisibleEntityIds(visibleList, visibleIds) : [],
