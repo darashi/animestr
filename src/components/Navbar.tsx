@@ -1,7 +1,7 @@
 import { IconLogin, IconLogout, IconUser, IconX } from "@tabler/icons-react";
+import { useEffect, useRef, useState } from "react";
 import useNip07Auth from "../hooks/useNip07Auth";
 import useProfile from "../hooks/useProfile";
-import { formatShortPubkey } from "../lib/nostr";
 import { buildHomePath } from "../lib/routes";
 import SearchBar from "./SearchBar";
 
@@ -13,8 +13,25 @@ function Navbar({ navigate }: NavbarProps) {
 	const basePath = import.meta.env.BASE_URL ?? "/";
 	const { session, isLoggingIn, error, login, logout, clearError } =
 		useNip07Auth();
-	const { picture, name } = useProfile(session?.pubkey);
-	const accountLabel = name ?? (session ? formatShortPubkey(session.pubkey) : "");
+	const { picture } = useProfile(session?.pubkey);
+	const [isMenuOpen, setIsMenuOpen] = useState(false);
+	const menuRef = useRef<HTMLDetailsElement>(null);
+
+	useEffect(() => {
+		if (!isMenuOpen) return;
+		const closeOnOutsideClick = (event: PointerEvent) => {
+			if (!menuRef.current?.contains(event.target as Node)) setIsMenuOpen(false);
+		};
+		const closeOnEscape = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setIsMenuOpen(false);
+		};
+		document.addEventListener("pointerdown", closeOnOutsideClick);
+		document.addEventListener("keydown", closeOnEscape);
+		return () => {
+			document.removeEventListener("pointerdown", closeOnOutsideClick);
+			document.removeEventListener("keydown", closeOnEscape);
+		};
+	}, [isMenuOpen]);
 
 	return (
 		<>
@@ -32,27 +49,36 @@ function Navbar({ navigate }: NavbarProps) {
 					/>
 					<div className="ml-auto flex-none sm:ml-0">
 						{session ? (
-							<details className="dropdown dropdown-end">
-								<summary className="btn btn-ghost btn-sm gap-2">
+							<details
+								ref={menuRef}
+								className={`dropdown dropdown-end${isMenuOpen ? " dropdown-open" : ""}`}
+								open={isMenuOpen}
+								onToggle={(event) => setIsMenuOpen(event.currentTarget.open)}
+							>
+								<summary
+									className="btn btn-ghost btn-circle ml-2"
+									aria-label="Open account menu"
+								>
 									<div className="avatar">
-										<div className="w-7 rounded-full bg-base-200 overflow-hidden">
+										<div className="flex w-10 items-center justify-center overflow-hidden rounded-full bg-primary/20 font-semibold text-primary-content hover:bg-primary/20">
 											{picture ? (
 												<img src={picture} alt="" className="h-full w-full object-cover" />
 											) : (
-												<span className="flex h-full w-full items-center justify-center">
-													<IconUser size={16} />
-												</span>
+												<IconUser size={22} />
 											)}
 										</div>
 									</div>
-									<span className="hidden sm:inline">{accountLabel}</span>
 								</summary>
-								<ul className="menu dropdown-content z-20 mt-3 w-64 rounded-box bg-base-100 p-2 shadow">
-									<li className="menu-title">
-										<span className="truncate">{accountLabel}</span>
-									</li>
-									<li>
-										<button type="button" onClick={logout}>
+								<ul className="menu menu-sm dropdown-content right-0 z-20 mt-3 w-56 rounded-box bg-base-100 p-3 shadow">
+									<li className="text-lg leading-relaxed">
+										<button
+											type="button"
+											onClick={() => {
+												logout();
+												setIsMenuOpen(false);
+											}}
+											className="flex w-full items-center gap-2 px-2 py-3 text-left"
+										>
 											<IconLogout size={18} />
 											Log out
 										</button>
