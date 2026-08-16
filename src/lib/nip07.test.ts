@@ -1,6 +1,6 @@
 import { finalizeEvent, getPublicKey, type EventTemplate } from "nostr-tools/pure";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { signEventWithNip07 } from "./nip07";
+import { requestNip07PublicKey, signEventWithNip07 } from "./nip07";
 
 const OWNER_SECRET = new Uint8Array(32).fill(1);
 const OTHER_SECRET = new Uint8Array(32).fill(2);
@@ -16,9 +16,27 @@ const TEMPLATE: EventTemplate = {
 	],
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+	vi.unstubAllGlobals();
+	vi.useRealTimers();
+});
 
-describe("signEventWithNip07", () => {
+describe("NIP-07 signer", () => {
+	it("stops waiting when public-key approval is left unanswered", async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal("window", {
+			nostr: {
+				getPublicKey: () => new Promise<string>(() => {}),
+			},
+		});
+
+		const result = expect(requestNip07PublicKey()).rejects.toThrow(
+			"signer did not respond",
+		);
+		await vi.runAllTimersAsync();
+		await result;
+	});
+
 	it("accepts a valid event signed by the logged-in account", async () => {
 		vi.stubGlobal("window", {
 			nostr: {
@@ -62,5 +80,21 @@ describe("signEventWithNip07", () => {
 		await expect(signEventWithNip07(TEMPLATE, OWNER)).rejects.toThrow(
 			"changed the event template",
 		);
+	});
+
+	it("stops waiting when signing approval is left unanswered", async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal("window", {
+			nostr: {
+				getPublicKey: async () => OWNER,
+				signEvent: () => new Promise(() => {}),
+			},
+		});
+
+		const result = expect(signEventWithNip07(TEMPLATE, OWNER)).rejects.toThrow(
+			"signer did not respond",
+		);
+		await vi.runAllTimersAsync();
+		await result;
 	});
 });

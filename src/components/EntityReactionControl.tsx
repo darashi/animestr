@@ -31,7 +31,9 @@ function EntityReactionControl({
 		} catch (error) {
 			console.error("Failed to save Wikidata reaction", error);
 			window.alert(
-				"Failed to save the reaction. Check your Nostr signer and relay connection.",
+				error instanceof Error
+					? error.message
+					: "Failed to save the reaction. Check your Nostr signer and relay connection.",
 			);
 			throw error;
 		}

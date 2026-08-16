@@ -1,15 +1,39 @@
 import type { EventTemplate, NostrEvent } from "nostr-tools/pure";
 import { isVerifiedNostrEvent, normalizePubkey } from "./nostr";
 
+const NIP07_REQUEST_TIMEOUT_MS = 60_000;
+
 function getNip07Provider() {
 	if (!window.nostr?.getPublicKey) {
-		throw new Error("NIP-07 provider is not available");
+		throw new Error("No NIP-07 signer was found in this browser.");
 	}
 	return window.nostr;
 }
 
+async function waitForNip07<T>(request: Promise<T>): Promise<T> {
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			request,
+			new Promise<never>((_, reject) => {
+				timeout = setTimeout(() => {
+					reject(
+						new Error(
+							"The Nostr signer did not respond. Approve the request in the signer popup and try again.",
+						),
+					);
+				}, NIP07_REQUEST_TIMEOUT_MS);
+			}),
+		]);
+	} finally {
+		if (timeout !== undefined) clearTimeout(timeout);
+	}
+}
+
 export async function requestNip07PublicKey(): Promise<string> {
-	const pubkey = normalizePubkey(await getNip07Provider().getPublicKey!());
+	const pubkey = normalizePubkey(
+		await waitForNip07(getNip07Provider().getPublicKey!()),
+	);
 	if (!pubkey) throw new Error("NIP-07 provider returned an invalid public key");
 	return pubkey;
 }
@@ -29,14 +53,14 @@ export async function signEventWithNip07(
 	expectedPubkey: string,
 ): Promise<NostrEvent> {
 	const provider = getNip07Provider();
-	if (!provider.signEvent) throw new Error("NIP-07 signer is not available");
+	if (!provider.signEvent) throw new Error("The NIP-07 signer cannot sign events.");
 
 	const activePubkey = await requestNip07PublicKey();
 	if (activePubkey !== expectedPubkey) {
 		throw new Error("NIP-07 account does not match the logged-in account");
 	}
 
-	const event = await provider.signEvent(template);
+	const event = await waitForNip07(provider.signEvent(template));
 	if (!isVerifiedNostrEvent(event)) {
 		throw new Error("NIP-07 provider returned an invalid signed event");
 	}

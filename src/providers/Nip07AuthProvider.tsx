@@ -54,7 +54,11 @@ function Nip07AuthProvider({ children }: { children: ReactNode }) {
 			persistSession(nextSession);
 		} catch (loginError) {
 			console.error("Failed to log in with NIP-07", loginError);
-			setError("Unable to log in with a NIP-07 Nostr signer.");
+			setError(
+				loginError instanceof Error
+					? loginError.message
+					: "Unable to log in with a NIP-07 Nostr signer.",
+			);
 		} finally {
 			setIsLoggingIn(false);
 		}
