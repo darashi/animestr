@@ -43,7 +43,7 @@ function EntityReactionControl({
 	if (!entityId) return null;
 
 	return (
-		<span className="inline-flex items-center gap-1">
+		<span className="inline-flex items-center gap-3">
 			<ReactionAvatarStack
 				reactions={reactions}
 				limit={limit}

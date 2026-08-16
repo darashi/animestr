@@ -48,7 +48,7 @@ function LinkedUserAvatar({
 		>
 			<span className={symbol ? "indicator" : "inline-flex"}>
 				{symbol ? (
-					<span className={`indicator-item indicator-end indicator-bottom z-10 grid h-3.5 min-w-3.5 place-items-center rounded-full border border-base-300 bg-base-100 px-0.5 text-[10px] leading-none shadow-sm ${isLike ? "font-bold text-primary" : ""}`}>
+					<span className={`indicator-item indicator-end indicator-bottom z-10 grid h-4 min-w-4 place-items-center rounded-full border border-base-300 bg-base-100 px-0.5 text-xs leading-none shadow-sm ${isLike ? "font-bold text-primary" : ""}`}>
 						{symbol}
 					</span>
 				) : null}

@@ -100,7 +100,7 @@ function ReactionOverflow({ reactions, count }: ReactionOverflowProps) {
 		<span ref={containerRef} className="relative inline-flex">
 			<button
 				type="button"
-				className="btn btn-ghost btn-circle btn-xs text-[10px] text-base-content/60"
+				className="btn btn-ghost btn-circle btn-md text-xs text-base-content/60"
 				onClick={() => setIsOpen((current) => !current)}
 				aria-label={`Show all ${reactions.length} reactions`}
 				aria-expanded={isOpen}
@@ -117,7 +117,7 @@ function ReactionOverflow({ reactions, count }: ReactionOverflowProps) {
 						<span className="font-semibold text-base-content">All reactions</span>
 						<button
 							type="button"
-							className="btn btn-ghost btn-circle btn-xs"
+							className="btn btn-ghost btn-circle btn-md"
 							onClick={() => setIsOpen(false)}
 							aria-label="Close"
 						>

@@ -70,9 +70,9 @@ function FavoriteReactionButton({
 			title={label}
 		>
 			{isFavorite ? (
-				<IconStarFilled size={16} />
+				<IconStarFilled size={24} />
 			) : (
-				<IconStar size={16} />
+				<IconStar size={24} />
 			)}
 		</button>
 	);
@@ -99,7 +99,7 @@ function ReactionTile({
 			) : null}
 			<button
 				type="button"
-				className={`btn btn-ghost btn-square btn-sm text-xl ${isActiveVisible ? `bg-primary/10 ring-1 ring-primary/30 ${isInteractive ? "" : "cursor-default"}` : ""}`}
+				className={`btn btn-ghost btn-square btn-md text-xl ${isActiveVisible ? `bg-primary/10 ring-1 ring-primary/30 ${isInteractive ? "" : "cursor-default"}` : ""}`}
 				onClick={onClick ?? undefined}
 				disabled={isSaving}
 				aria-label={label}
@@ -215,12 +215,12 @@ function EmojiReactionPicker({
 					isFavorite={hasFavorite}
 					isDisabled={!isLoggedIn || isSaving}
 					label={favoriteLabel}
-					className="btn-circle btn-xs"
+					className="btn-circle btn-md"
 					onClick={() => void toggleAndClose("+")}
 				/>
 				<button
 					type="button"
-					className="btn btn-ghost btn-circle btn-xs text-base-content/60"
+					className="btn btn-ghost btn-circle btn-md text-base-content/40"
 					style={triggerStyle}
 					popoverTarget={isLoggedIn ? popoverId : undefined}
 					onClick={prepareToOpen}
@@ -230,7 +230,7 @@ function EmojiReactionPicker({
 					aria-haspopup="dialog"
 					title={triggerLabel}
 				>
-					<IconMoodPlus size={16} />
+					<IconMoodPlus size={24} />
 				</button>
 			</span>
 
@@ -255,7 +255,7 @@ function EmojiReactionPicker({
 							isFavorite={hasFavorite}
 							isDisabled={isSaving}
 							label={hasFavorite ? "Remove favorite" : "Add favorite"}
-							className="btn-square btn-sm"
+							className="btn-square btn-md"
 							onClick={() => void toggleAndClose("+")}
 						/>
 						{recentEmoji.map((content) => {
@@ -281,7 +281,7 @@ function EmojiReactionPicker({
 						) : null}
 						<button
 							type="button"
-							className="btn btn-ghost btn-circle btn-xs"
+							className="btn btn-ghost btn-circle btn-md"
 							onClick={close}
 							aria-label="Close"
 						>
@@ -380,7 +380,7 @@ function EmojiReactionPicker({
 								<button
 									type="button"
 									key={content}
-									className="btn btn-sm gap-1 px-2"
+									className="btn btn-md gap-1 px-3"
 									onClick={() => void removeAndClose(content)}
 									disabled={isSaving}
 									aria-label={`Remove ${symbol} reaction`}

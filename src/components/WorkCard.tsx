@@ -32,7 +32,7 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 				<h3 className="card-title text-base leading-tight">
 					<span className="flex flex-wrap items-center gap-2 break-words">
 						{workLink ? <a className="link link-hover" href={workLink}>{title}</a> : title}
-						<span className="inline-flex items-center gap-2">
+						<span className="inline-flex items-center gap-3">
 							<a
 								className="badge badge-outline badge-primary inline-flex align-middle rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
 								href={url}

@@ -27,7 +27,7 @@ function WorkPage({ basePath, workId }: WorkPageProps) {
 			<section className="space-y-4">
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
-						<div className="flex flex-wrap items-center gap-2">
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 							<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
 							<a
 								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"

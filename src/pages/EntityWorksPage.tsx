@@ -29,7 +29,7 @@ function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorks
 			<section className="space-y-4">
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
-						<div className="flex flex-wrap items-center gap-2">
+						<div className="flex flex-wrap items-center gap-x-3 gap-y-2">
 							<h2 className="text-lg font-semibold">
 								{titlePrefix}: {entityName}
 							</h2>
