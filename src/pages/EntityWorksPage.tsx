@@ -1,11 +1,10 @@
 import { useMemo } from "react";
-import ReactionAvatarStack from "../components/ReactionAvatarStack";
+import EntityReactionControl from "../components/EntityReactionControl";
 import WorkCard from "../components/WorkCard";
 import useEntityWorks from "../hooks/useEntityWorks";
 import useThingstrEntityReactions from "../hooks/useThingstrEntityReactions";
 import useVisibleWorkIds from "../hooks/useVisibleWorkIds";
 import useWorkDetails from "../hooks/useWorkDetails";
-import useWorkReactions from "../hooks/useWorkReactions";
 import { collectVisibleEntityIds, groupWorksByStartYear } from "../lib/works";
 
 type EntityWorksPageProps = {
@@ -23,8 +22,6 @@ function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorks
 		[entityId, visibleIds, worksWithDetails],
 	);
 	const worksByYear = useMemo(() => groupWorksByStartYear(worksWithDetails), [worksWithDetails]);
-	const { reactions } = useWorkReactions(entityId);
-
 	useThingstrEntityReactions(visibleEntityIds);
 
 	return (
@@ -44,7 +41,7 @@ function EntityWorksPage({ entityId, titlePrefix, buildWorksQuery }: EntityWorks
 							>
 								{entityId}
 							</a>
-							<ReactionAvatarStack reactions={reactions} />
+							<EntityReactionControl entityId={entityId} />
 						</div>
 					</div>
 				</div>

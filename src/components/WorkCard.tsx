@@ -1,9 +1,8 @@
 import { forwardRef } from "react";
 import { estimateSeason, formatDate } from "../lib/season";
 import { buildCastPath, buildCompanyPath, buildStaffPath, buildWorkPath } from "../lib/routes";
-import useWorkReactions from "../hooks/useWorkReactions";
 import type { Work } from "../types/work";
-import ReactionAvatarStack from "./ReactionAvatarStack";
+import EntityReactionControl from "./EntityReactionControl";
 import WorkEntityRow from "./WorkEntityRow";
 
 const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
@@ -22,7 +21,6 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 	ref,
 ) {
 	const seasonInfo = estimateSeason(startDate, endDate);
-	const { reactions } = useWorkReactions(id);
 	const basePath = import.meta.env.BASE_URL ?? "/";
 	const buildCastLink = (entityId: string) => buildCastPath(basePath, entityId);
 	const buildStaffLink = (entityId: string) => buildStaffPath(basePath, entityId);
@@ -43,7 +41,7 @@ const WorkCard = forwardRef<HTMLLIElement, Work>(function WorkCard(
 							>
 								{id || "Q?"}
 							</a>
-							<ReactionAvatarStack reactions={reactions} />
+							<EntityReactionControl entityId={id} />
 						</span>
 					</span>
 				</h3>

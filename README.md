@@ -20,6 +20,8 @@ VITE_PROFILE_RELAYS=wss://profile-relay.example
 VITE_THINGSTR_RELAYS=wss://reaction-relay.example
 ```
 
+To save reactions, use a browser with a [NIP-07](https://github.com/nostr-protocol/nips/blob/master/07.md) signer. The application stores only the public key in local storage; event signing remains in the signer. Reaction avatars use a primary ring for the logged-in user and a secondary ring for users in the logged-in user's NIP-02 follow list.
+
 ## Commands
 
 ```sh

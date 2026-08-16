@@ -1,13 +1,12 @@
 import { useMemo } from "react";
+import EntityReactionControl from "../components/EntityReactionControl";
+import WorkEntityRow from "../components/WorkEntityRow";
 import useThingstrEntityReactions from "../hooks/useThingstrEntityReactions";
 import useWork from "../hooks/useWork";
-import useWorkReactions from "../hooks/useWorkReactions";
 import { buildCastPath, buildCompanyPath, buildStaffPath } from "../lib/routes";
 import { estimateSeason, formatDate } from "../lib/season";
 import { collectVisibleEntityIds } from "../lib/works";
 import type { Work } from "../types/work";
-import ReactionAvatarStack from "../components/ReactionAvatarStack";
-import WorkEntityRow from "../components/WorkEntityRow";
 
 type WorkPageProps = {
 	basePath: string;
@@ -16,7 +15,6 @@ type WorkPageProps = {
 
 function WorkPage({ basePath, workId }: WorkPageProps) {
 	const { work, loading, error } = useWork(workId);
-	const { reactions } = useWorkReactions(work?.id ?? workId);
 	const reactionEntityIds = useMemo(
 		() => work ? collectVisibleEntityIds([work], new Set([work.id])) : [workId],
 		[work, workId],
@@ -30,7 +28,7 @@ function WorkPage({ basePath, workId }: WorkPageProps) {
 				<div className="card bg-base-100 shadow-sm">
 					<div className="card-body">
 						<div className="flex flex-wrap items-center gap-2">
-						<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
+							<h2 className="text-lg font-semibold">作品: {work?.title ?? workId}</h2>
 							<a
 								className="badge badge-outline badge-primary rounded-full no-underline font-normal text-xs px-2 py-1 whitespace-nowrap"
 								href={work?.url ?? `https://www.wikidata.org/entity/${workId}`}
@@ -39,7 +37,7 @@ function WorkPage({ basePath, workId }: WorkPageProps) {
 							>
 								{workId}
 							</a>
-							<ReactionAvatarStack reactions={reactions} />
+							<EntityReactionControl entityId={work?.id ?? workId} />
 						</div>
 					</div>
 				</div>
